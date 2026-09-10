@@ -10,10 +10,10 @@ public class ObservationTest
     private static AttributeSpecLibrary CreateLibrary()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("hero-strength", "strength", 0, 100));
-        library.Register(new AttributeSpec("hero-luck", "luck"));
-        library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength * 2"));
-        library.Register(new AttributeSpec("hero-total", "total", expression: "attack + 5"));
+        library.Register(new AttributeSpec("strength", 0, 100));
+        library.Register(new AttributeSpec("luck"));
+        library.Register(new AttributeSpec("attack"));
+        library.Register(new AttributeSpec("total"));
         return library;
     }
 
@@ -21,9 +21,9 @@ public class ObservationTest
     {
         // strength → attack(strength*2) → total(attack+5)
         return new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-strength")
-            .Require("warrior-attack")
-            .Require("hero-total")
+            .Require("strength")
+            .Require("attack", "strength * 2")
+            .Require("total", "attack + 5")
             .Build();
     }
 
@@ -107,8 +107,8 @@ public class ObservationTest
     {
         var evaluations = 0;
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-strength")
-            .Require("warrior-attack")
+            .Require("strength")
+            .Require("attack", "strength * 2")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);
         // 计数求值器观测求值时机（失效图仍由表达式依赖决定）

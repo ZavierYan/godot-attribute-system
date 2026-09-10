@@ -10,11 +10,10 @@ public class AttributeOwnerTest
     private static AttributeSpecLibrary CreateLibrary()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("hero-strength", "strength", 0, 100));
-        library.Register(new AttributeSpec("hero-dexterity", "dexterity", 0, 100));
-        library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength+0.5*dexterity"));
-        library.Register(new AttributeSpec("mage-attack", "attack", expression: "intelligence*1.2"));
-        library.Register(new AttributeSpec("mage-intelligence", "intelligence", 0, 100));
+        library.Register(new AttributeSpec("strength", 0, 100));
+        library.Register(new AttributeSpec("dexterity", 0, 100));
+        library.Register(new AttributeSpec("intelligence", 0, 100));
+        library.Register(new AttributeSpec("attack", 0, 999));
         return library;
     }
 
@@ -24,9 +23,9 @@ public class AttributeOwnerTest
     public void BuildCreatesOwnerAccessibleByAttributeName()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-strength")
-            .Require("hero-dexterity")
-            .Require("warrior-attack")
+            .Require("strength")
+            .Require("dexterity")
+            .Require("attack", "strength+0.5*dexterity")
             .Build();
 
         AssertBool(owner.TryGet("strength", out var strength)).IsTrue();
@@ -34,35 +33,47 @@ public class AttributeOwnerTest
         AssertBool(owner.TryGet("attack", out var attack)).IsTrue();
         AssertBool(strength!.IsDerived).IsFalse();
         AssertBool(attack!.IsDerived).IsTrue();
-        // SpecName 仅作调试信息
-        AssertThat(attack.SourceSpecName).IsEqual("warrior-attack");
     }
 
     [TestCase]
-    public void SameAttributeNameSpecsBuildIntoSeparateOwners()
+    public void SameAttributeNameWithDifferentExpressionsBuildsSeparately()
     {
         var library = CreateLibrary();
 
         var warrior = new AttributeOwnerBuilder(library)
-            .Require("hero-strength")
-            .Require("hero-dexterity")
-            .Require("warrior-attack")
+            .Require("strength")
+            .Require("dexterity")
+            .Require("attack", "strength+0.5*dexterity")
             .Build();
         var mage = new AttributeOwnerBuilder(library)
-            .Require("mage-intelligence")
-            .Require("mage-attack")
+            .Require("intelligence")
+            .Require("attack", "intelligence*1.2")
             .Build();
 
-        AssertBool(warrior.TryGet("attack", out var warriorAttack)).IsTrue();
-        AssertBool(mage.TryGet("attack", out var mageAttack)).IsTrue();
-        AssertThat(warriorAttack!.SourceSpecName).IsEqual("warrior-attack");
-        AssertThat(mageAttack!.SourceSpecName).IsEqual("mage-attack");
+        warrior.SetValue("strength", (AttributeValueType)10);
+        warrior.SetValue("dexterity", (AttributeValueType)6);
+        mage.SetValue("intelligence", (AttributeValueType)10);
+
+        AssertThat(warrior.GetValue("attack")).IsEqual((AttributeValueType)13);
+        AssertThat(mage.GetValue("attack")).IsEqual((AttributeValueType)12);
+    }
+
+    [TestCase]
+    public void DuplicateBaseDeclarationIsIdempotent()
+    {
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("strength")
+            .Build();
+
+        AssertBool(owner.TryGet("strength", out _)).IsTrue();
+        AssertThat(owner.Attributes.Count()).IsEqual(1);
     }
 
     // ---- 构建期错误 ----
 
     [TestCase]
-    public void BuildWithMissingSpecThrowsWithSpecName()
+    public void BuildWithMissingSpecThrowsWithName()
     {
         var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary()).Require("hero-mana").Build());
 
@@ -74,8 +85,8 @@ public class AttributeOwnerTest
     public void BuildWithUnknownExpressionReferenceThrowsWithExpressionAndName()
     {
         var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-strength")
-            .Require("warrior-attack")
+            .Require("strength")
+            .Require("attack", "strength+0.5*dexterity")
             .Build());
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
@@ -84,27 +95,16 @@ public class AttributeOwnerTest
     }
 
     [TestCase]
-    public void BuildWithDuplicateAttributeNameThrowsWithBothSpecNames()
-    {
-        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
-            .Require("warrior-attack")
-            .Require("mage-attack")
-            .Build());
-
-        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
-        AssertThat(caught!.Message).Contains("attack");
-        AssertThat(caught.Message).Contains("warrior-attack");
-        AssertThat(caught.Message).Contains("mage-attack");
-    }
-
-    [TestCase]
     public void BuildWithCycleThrowsWithCycleChain()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("cycle-a", "a", expression: "b + 1"));
-        library.Register(new AttributeSpec("cycle-b", "b", expression: "a + 1"));
+        library.Register(new AttributeSpec("a"));
+        library.Register(new AttributeSpec("b"));
 
-        var caught = Catch(() => new AttributeOwnerBuilder(library).Require("cycle-a").Require("cycle-b").Build());
+        var caught = Catch(() => new AttributeOwnerBuilder(library)
+            .Require("a", "b + 1")
+            .Require("b", "a + 1")
+            .Build());
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
         AssertThat(caught!.Message).Contains("循环依赖");
@@ -116,9 +116,11 @@ public class AttributeOwnerTest
     public void BuildWithSelfReferenceThrowsWithCycleChain()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("self", "x", expression: "x + 1"));
+        library.Register(new AttributeSpec("x"));
 
-        var caught = Catch(() => new AttributeOwnerBuilder(library).Require("self").Build());
+        var caught = Catch(() => new AttributeOwnerBuilder(library)
+            .Require("x", "x + 1")
+            .Build());
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
         AssertThat(caught!.Message).Contains("循环依赖");
@@ -136,16 +138,82 @@ public class AttributeOwnerTest
     [TestCase]
     public void BuildWithSyntaxErrorThrowsAtBuild()
     {
-        var library = CreateLibrary();
-        library.Register(new AttributeSpec("broken-attack", "brokenAttack", expression: "strength *"));
-
-        var caught = Catch(() => new AttributeOwnerBuilder(library)
-            .Require("hero-strength")
-            .Require("broken-attack")
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "strength *")
             .Build());
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
         AssertThat(caught!.Message).Contains("strength *");
+    }
+
+    // ---- 声明冲突校验 ----
+
+    [TestCase]
+    public void MixedBaseAndDerivedDeclarationThrowsAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack")
+            .Require("attack", "strength * 2")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
+    [TestCase]
+    public void MixedDeclarationInReverseOrderThrowsAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "strength * 2")
+            .Require("attack")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
+    [TestCase]
+    public void DuplicateDerivedDeclarationThrowsAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "strength * 2")
+            .Require("attack", "strength * 3")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
+    [TestCase]
+    public void DuplicateIdenticalExpressionDeclarationThrowsAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "strength * 2")
+            .Require("attack", "strength * 2")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
+    [TestCase]
+    public void BlankExpressionThrowsAtDeclaration()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "   "));
+
+        AssertThat(caught).IsInstanceOf<ArgumentException>();
+        AssertThat(caught!.Message).Contains("expression");
     }
 
     // ---- 运行时访问 ----
@@ -153,7 +221,7 @@ public class AttributeOwnerTest
     [TestCase]
     public void GetMissingAttributeNameThrows()
     {
-        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("hero-strength").Build();
+        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("strength").Build();
 
         var caught = Catch(() => owner.Get("mana"));
 
@@ -164,7 +232,7 @@ public class AttributeOwnerTest
     [TestCase]
     public void BaseValueInitializesToClampedDefault()
     {
-        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("hero-strength").Build();
+        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("strength").Build();
 
         AssertThat(owner.GetValue("strength")).IsEqual((AttributeValueType)0);
     }
@@ -174,7 +242,7 @@ public class AttributeOwnerTest
     [TestCase]
     public void BaseValueBelowMinimumIsClamped()
     {
-        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("hero-strength").Build();
+        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("strength").Build();
 
         owner.SetValue("strength", -(AttributeValueType)5);
 
@@ -184,7 +252,7 @@ public class AttributeOwnerTest
     [TestCase]
     public void BaseValueInsideRangeIsKept()
     {
-        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("hero-strength").Build();
+        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("strength").Build();
 
         owner.SetValue("strength", (AttributeValueType)42);
 
@@ -194,7 +262,7 @@ public class AttributeOwnerTest
     [TestCase]
     public void BaseValueAboveMaximumIsClamped()
     {
-        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("hero-strength").Build();
+        var owner = new AttributeOwnerBuilder(CreateLibrary()).Require("strength").Build();
 
         owner.SetValue("strength", (AttributeValueType)150);
 
@@ -205,9 +273,9 @@ public class AttributeOwnerTest
     public void WritingDerivedAttributeThrows()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-strength")
-            .Require("hero-dexterity")
-            .Require("warrior-attack")
+            .Require("strength")
+            .Require("dexterity")
+            .Require("attack", "strength+0.5*dexterity")
             .Build();
 
         var caught = Catch(() => owner.Get("attack").Value = (AttributeValueType)999);

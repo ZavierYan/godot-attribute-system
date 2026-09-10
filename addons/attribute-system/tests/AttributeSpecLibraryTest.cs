@@ -11,29 +11,28 @@ public class AttributeSpecLibraryTest
     public void RegisterThenGetReturnsSameInstance()
     {
         var library = new AttributeSpecLibrary();
-        var spec = new AttributeSpec("warrior-attack", "attack", expression: "strength*2");
+        var spec = new AttributeSpec("attack", 0, 999);
 
         library.Register(spec);
 
-        AssertBool(library.Contains("warrior-attack")).IsTrue();
-        AssertThat(library.Get("warrior-attack")).IsSame(spec);
+        AssertBool(library.Contains("attack")).IsTrue();
+        AssertThat(library.Get("attack")).IsSame(spec);
     }
 
     [TestCase]
-    public void RegisterDuplicateSpecNameIsRejected()
+    public void RegisterDuplicateAttributeNameIsRejected()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength*2"));
+        library.Register(new AttributeSpec("attack", 0, 999));
 
-        var caught = Catch(() =>
-            library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength*3")));
+        var caught = Catch(() => library.Register(new AttributeSpec("attack", 0, 100)));
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
-        AssertThat(caught!.Message).Contains("warrior-attack");
+        AssertThat(caught!.Message).Contains("attack");
     }
 
     [TestCase]
-    public void GetMissingSpecNameThrowsWithName()
+    public void GetMissingAttributeNameThrowsWithName()
     {
         var library = new AttributeSpecLibrary();
 
@@ -44,14 +43,14 @@ public class AttributeSpecLibraryTest
     }
 
     [TestCase]
-    public void SpecsSharingAttributeNameCanBeRegistered()
+    public void TryGetAndContainsReflectRegistration()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength*2"));
+        library.Register(new AttributeSpec("attack"));
 
-        library.Register(new AttributeSpec("mage-attack", "attack", expression: "intelligence*1.2"));
-
-        AssertBool(library.Contains("warrior-attack")).IsTrue();
-        AssertBool(library.Contains("mage-attack")).IsTrue();
+        AssertBool(library.TryGet("attack", out var spec)).IsTrue();
+        AssertThat(spec!.AttributeName).IsEqual("attack");
+        AssertBool(library.TryGet("mana", out _)).IsFalse();
+        AssertBool(library.Contains("mana")).IsFalse();
     }
 }

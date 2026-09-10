@@ -60,7 +60,9 @@ internal sealed class CompiledExpression
         return ConvertResult(raw);
     }
 
-    /// <summary>编译为统一求值委托（与委托注入通道同签名，owner 对两条通道无感知）。</summary>
+    /// <summary>编译为统一求值委托（与委托注入通道同签名，owner 对两条通道无感知）。
+    /// 委托捕获本实例且 <see cref="Evaluate"/> 每次写入 Parameters——非线程安全；
+    /// 同族克隆实例共享此委托（见 AttributeOwner.Clone），并发求值会互相污染。</summary>
     public AttributeCalculator AsCalculator() => dependencyValues => Evaluate(dependencyValues);
 
     private static IReadOnlyList<string> CollectIdentifiers(LogicalExpression ast)

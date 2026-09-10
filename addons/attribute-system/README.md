@@ -21,59 +21,68 @@ global using AttributeValueType = System.Single; // 默认 float
 
 ## 第 2 步：定义并注册 AttributeSpec
 
-每个 `AttributeSpec` 描述一种属性，创建后登记到 `AttributeSpecLibrary`：
+每个 `AttributeSpec` 描述一种属性（名字 + 区间），创建后登记到 `AttributeSpecLibrary`：
 
 ```csharp
 using AttributeSystem;
 
 var library = new AttributeSpecLibrary();
 
-// base 属性：给名字和区间即可（区间可选，缺省不限制）
-library.Register(new AttributeSpec(
-    specName: "hero-strength",       // spec 名：库内唯一，构建时按它挑定义
-    attributeName: "strength",       // 属性名：运行时读写、表达式里引用都用它
-    minValue: 0, maxValue: 100));
-
-// derived 属性：多给一个 expression，值由其它属性算出
-library.Register(new AttributeSpec(
-    specName: "warrior-attack",
-    attributeName: "attack",
-    minValue: 0, maxValue: 999,
-    expression: "strength+0.5*dexterity"));
+// 名字 + 区间（区间可选，缺省不限制）
+library.Register(new AttributeSpec("strength", 0, 100));
+library.Register(new AttributeSpec("dexterity", 0, 100));
+library.Register(new AttributeSpec("intelligence", 0, 100));
+library.Register(new AttributeSpec("attack", 0, 999));
 ```
 
-要点：
+`AttributeName` 库内唯一：同名登记会被拒绝。
 
-- **attributeName 允许多个 spec 共享**——不同场景同名属性可以有不同算法，构建时按 specName 二选一：
+## 第 3 步：用 Builder 组装 AttributeOwner（属性集合 + 表达式声明）
 
-  ```csharp
-  library.Register(new AttributeSpec("mage-attack", "attack", 0, 999, expression: "intelligence*1.2"));
-  ```
-
-  但同一个 owner 里属性名不能重复（表达式按属性名解析，重名即歧义）。
-- **表达式里的属性名就是它的依赖**：`strength+0.5*dexterity` 声明依赖 `strength` 和 `dexterity`，任一变化都会让该属性自动失效、下次读取时重算。除此之外没有任何依赖声明方式。
-- `expression` 为 `null`（缺省）即 base 属性，提供了就是 derived 属性。
-
-## 第 3 步：用 Builder 构建 AttributeOwner
-
-告诉 builder 本场景需要哪些 spec，它从库里取出定义、装配成一个属性容器：
+告诉 builder 本场景需要哪些属性：只给名字就是 base，多传一个表达式就是 derived（同一个属性名在不同构建里可以用不同公式）：
 
 ```csharp
 var warrior = new AttributeOwnerBuilder(library)
-    .Require("hero-strength")     // 全部用 specName
-    .Require("hero-dexterity")
-    .Require("warrior-attack")
+    .Require("strength")                          // base：只要名字
+    .Require("dexterity")
+    .Require("attack", "strength+0.5*dexterity")  // derived：多传一个表达式
+    .Build();
+
+// 同一个库、同一个 attack spec，法师声明另一条公式
+var mage = new AttributeOwnerBuilder(library)
+    .Require("intelligence")
+    .Require("attack", "intelligence*1.2")
     .Build();
 ```
 
-同一个 library 可以构建任意多个 owner（例如战士、法师各构建一个，各自挑选自己的 attack 定义）。构建期会完成全部校验，任何问题都直接抛异常、不会带到运行期：
+场景公式建议收在使用方自己的静态工厂里（如 `OwnerFactory.Warrior(library)`），避免散落。构建期会完成全部校验，任何问题都直接抛异常、不会带到运行期：
 
 | 错误 | 异常信息包含 |
 |---|---|
-| Require 的 specName 未登记 | 缺失的 specName |
+| Require 的属性名未登记 | 缺失的属性名 |
+| 同一属性名冲突声明（base/derived 混合或重复表达式） | 属性名 |
+| Require 传入空白表达式（传入时即抛） | 参数名 |
+| 表达式语法错误（无法解析） | 表达式原文 |
 | 表达式引用了本次未构建的属性名 | 表达式原文 + 属性名 |
-| 同一次构建中 attributeName 重复 | 属性名 + 冲突的两个 specName |
 | 表达式循环依赖（含自引用） | 环路上的属性链 |
+
+同一属性名重复声明为 base 是幂等的，其余重复声明一律在构建期报错。
+
+### 用原型克隆批量生产 owner
+
+`Build()` 的产物可以当原型：`Clone()` 得到同构成的新实例——值从初始值开始，缓存与事件订阅全新，实例间互不影响。批量生产同类实体（小怪、召唤物等）时先构建原型、再逐个克隆：
+
+```csharp
+var warriorPrototype = new AttributeOwnerBuilder(library)
+    .Require("strength")
+    .Require("attack", "strength * 2")
+    .Build();
+
+var hero1 = warriorPrototype.Clone();
+var hero2 = warriorPrototype.Clone();   // 互相独立；克隆也可继续作为原型再克隆
+```
+
+注意：克隆体与原型共享内部编译产物，**并发求值不安全**——插件所有 API 仅主线程使用。
 
 ## 第 4 步：使用 Owner
 
@@ -141,24 +150,3 @@ dotnet test
 
 测试为纯逻辑测试（无需启动 Godot）；Godot 编辑器内的测试面板由 `addons/gdUnit4/` 提供，已随仓库启用。
 
-## 本期非目标
-
-- 修改器/modifier 桶（buff 加成聚合）
-- Godot Signal 事件通道（当前为 C# `event`；需要跨语言/编辑器连接时可在其上包一层转发 Node）
-- 编辑器 Inspector 配置化（spec 目前为纯代码定义）
-- 多线程安全
-
-## 文件结构
-
-```text
-addons/attribute-system/
-├── AttributeValueType.cs      # 全局值类型别名（切换值类型的唯一修改点）
-├── AttributeSpec.cs           # 属性定义（SpecName/AttributeName/最值/表达式）
-├── AttributeSpecLibrary.cs    # spec 库（按 SpecName 登记/检索）
-├── CompiledExpression.cs      # NCalc 封装：解析、依赖提取、求值转换
-├── Attribute.cs               # 运行时属性 + 变更/失效事件
-├── AttributeOwner.cs          # 属性容器 + 失效传播
-├── AttributeOwnerBuilder.cs   # 构建器（构建期校验：缺失/未知引用/重名/循环）
-├── NumberOps.cs               # 泛型数学工具（INumber 约束门槛）
-└── tests/                     # gdUnit4 测试套件
-```

@@ -64,9 +64,6 @@ public sealed class Attribute
     /// <summary>属性名（AttributeName），owner 内唯一。</summary>
     public string Name { get; }
 
-    /// <summary>来源 spec 的 SpecName，只读调试信息，不参与运行时行为。</summary>
-    public string SourceSpecName => _spec.SpecName;
-
     /// <summary>是否为 derived 属性。</summary>
     public bool IsDerived { get; }
 
@@ -90,6 +87,10 @@ public sealed class Attribute
     internal static Attribute CreateBase(AttributeSpec spec) => new(spec, isDerived: false);
 
     internal static Attribute CreateDerived(AttributeSpec spec) => new(spec, isDerived: true);
+
+    /// <summary>克隆：同一出生 spec 与 base/derived 身份，值/缓存/求值器/事件全新（值重置为初始）。
+    /// 求值器由 owner 装配时重新绑定。</summary>
+    internal Attribute CloneAttribute() => new(_spec, IsDerived);
 
     /// <summary>
     /// 当前值（derived 属性读取时惰性求值并缓存）；写入仅限 base 属性。

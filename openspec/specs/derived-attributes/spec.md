@@ -14,7 +14,7 @@ derived 属性的依赖关系 SHALL 完全由其表达式中的属性名标识�
 - **THEN** `attack` 的依赖集合为 {`strength`, `dexterity`}，二者任一变化都会使其缓存失效，其它属性变化不会
 
 ### Requirement: 表达式求值
-derived 属性的值 SHALL 由其 spec 表达式在引用属性的当前值上求值得出，支持四则运算、括号、数值字面量与 NCalc 内置函数（如 `Max`、`Min`、`Abs`、`Clamp` 风格函数）；求值结果 MUST 转换为 `AttributeValueType`。
+derived 属性的值 SHALL 由构建期为它注入的表达式在引用属性的当前值上求值得出，支持四则运算、括号、数值字面量与 NCalc 内置函数（如 `Max`、`Min`、`Abs`、`Clamp` 风格函数）；求值结果 MUST 转换为 `AttributeValueType`。
 
 #### Scenario: 简单算术表达式
 - **WHEN** `attack` 的表达式为 `strength+0.5*dexterity`，`strength` 为 10、`dexterity` 为 6
@@ -73,5 +73,5 @@ derived 属性求值的原始结果 MUST 钳制到 spec 的 `[MinValue, MaxValue
 语法错误或无法解析的表达式 MUST 在 owner 构建阶段抛出异常，而不是等到首次读取时。
 
 #### Scenario: 语法错误
-- **WHEN** 构建 owner 时某 spec 的表达式为 `strength *`（语法不完整）
+- **WHEN** 构建 owner 时为某属性注入的表达式为 `strength *`（语法不完整）
 - **THEN** 构建抛出异常，错误信息包含该表达式内容

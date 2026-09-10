@@ -9,17 +9,16 @@ public class DerivedAttributeTest
     private static AttributeSpecLibrary CreateLibrary()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("hero-strength", "strength", 0, 100));
-        library.Register(new AttributeSpec("hero-dexterity", "dexterity", 0, 100));
-        library.Register(new AttributeSpec("hero-luck", "luck"));
-        library.Register(new AttributeSpec("hero-vitality", "vitality", 0, 100));
-        library.Register(new AttributeSpec("warrior-attack", "attack", expression: "strength * 2"));
-        library.Register(new AttributeSpec("combined-attack", "attack", expression: "strength+0.5*dexterity"));
-        library.Register(new AttributeSpec("hero-total", "total", expression: "attack + 5"));
-        library.Register(new AttributeSpec("hero-net", "net", expression: "Max(attack - debuff, 0)"));
-        library.Register(new AttributeSpec("hero-debuff", "debuff"));
-        library.Register(new AttributeSpec("hero-deficit", "deficit", 0, 100, expression: "vitality - 100"));
-        library.Register(new AttributeSpec("capped-attack", "cappedAttack", 0, 50, expression: "strength * 2"));
+        library.Register(new AttributeSpec("strength", 0, 100));
+        library.Register(new AttributeSpec("dexterity", 0, 100));
+        library.Register(new AttributeSpec("luck"));
+        library.Register(new AttributeSpec("vitality", 0, 100));
+        library.Register(new AttributeSpec("attack", 0, 999));
+        library.Register(new AttributeSpec("total"));
+        library.Register(new AttributeSpec("net"));
+        library.Register(new AttributeSpec("debuff"));
+        library.Register(new AttributeSpec("deficit", 0, 100));
+        library.Register(new AttributeSpec("cappedAttack", 0, 50));
         return library;
     }
 
@@ -27,9 +26,9 @@ public class DerivedAttributeTest
     public void SimpleArithmeticExpressionComputesFromDependencies()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("combined-attack")
-            .Require("hero-strength")
-            .Require("hero-dexterity")
+            .Require("attack", "strength+0.5*dexterity")
+            .Require("strength")
+            .Require("dexterity")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);
         owner.SetValue("dexterity", (AttributeValueType)6);
@@ -41,9 +40,9 @@ public class DerivedAttributeTest
     public void DerivedCanReferenceDerived()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("warrior-attack")
-            .Require("hero-total")
-            .Require("hero-strength")
+            .Require("attack", "strength * 2")
+            .Require("total", "attack + 5")
+            .Require("strength")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);
 
@@ -55,10 +54,10 @@ public class DerivedAttributeTest
     public void BuiltInFunctionIsAvailableInExpression()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-net")
-            .Require("warrior-attack")
-            .Require("hero-debuff")
-            .Require("hero-strength")
+            .Require("net", "Max(attack - debuff, 0)")
+            .Require("attack", "strength * 2")
+            .Require("debuff")
+            .Require("strength")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);   // attack = 20
         owner.SetValue("debuff", (AttributeValueType)30);
@@ -71,11 +70,11 @@ public class DerivedAttributeTest
     {
         var evaluations = 0;
         var library = CreateLibrary();
-        library.Register(new AttributeSpec("tracked", "tracked", 0, 100, expression: "vitality * 2"));
+        library.Register(new AttributeSpec("tracked", 0, 100));
 
         var owner = new AttributeOwnerBuilder(library)
-            .Require("tracked")
-            .Require("hero-vitality")
+            .Require("tracked", "vitality * 2")
+            .Require("vitality")
             .Build();
         owner.SetValue("vitality", (AttributeValueType)10);
 
@@ -107,9 +106,9 @@ public class DerivedAttributeTest
     public void InvalidationPropagatesTransitively()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("warrior-attack")
-            .Require("hero-total")
-            .Require("hero-strength")
+            .Require("attack", "strength * 2")
+            .Require("total", "attack + 5")
+            .Require("strength")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);
         AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)20);
@@ -126,10 +125,10 @@ public class DerivedAttributeTest
     {
         var evaluations = 0;
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("combined-attack")
-            .Require("hero-strength")
-            .Require("hero-dexterity")
-            .Require("hero-luck")
+            .Require("attack", "strength+0.5*dexterity")
+            .Require("strength")
+            .Require("dexterity")
+            .Require("luck")
             .Build();
         owner.SetValue("strength", (AttributeValueType)10);
         owner.SetValue("dexterity", (AttributeValueType)6);
@@ -159,8 +158,8 @@ public class DerivedAttributeTest
     public void DerivedResultIsClampedToMaximum()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("capped-attack")
-            .Require("hero-strength")
+            .Require("cappedAttack", "strength * 2")
+            .Require("strength")
             .Build();
         owner.SetValue("strength", (AttributeValueType)40);
 
@@ -172,8 +171,8 @@ public class DerivedAttributeTest
     public void DerivedResultIsClampedToMinimum()
     {
         var owner = new AttributeOwnerBuilder(CreateLibrary())
-            .Require("hero-deficit")
-            .Require("hero-vitality")
+            .Require("deficit", "vitality - 100")
+            .Require("vitality")
             .Build();
 
         // vitality(0) - 100 = -100，钳到下限 0
