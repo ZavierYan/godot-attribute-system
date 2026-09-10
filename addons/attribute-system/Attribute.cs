@@ -50,9 +50,11 @@ public sealed class AttributeChangedEventArgs : EventArgs
 /// <summary>
 /// 运行时属性。base 属性的值可直接读写（写入时钳制到 [MinValue, MaxValue]）；
 /// derived 属性的值只读，缓存-懒加载：失效后首次读取时经统一求值委托重算并缓存。
+/// 最值等定义数据不复制，经由持有的出生 spec 引用提供（单一真相源）。
 /// </summary>
 public sealed class Attribute
 {
+    private readonly AttributeSpec _spec;
     private AttributeValueType _value;
     private bool _hasCachedValue;
     private Func<AttributeValueType>? _evaluator;
@@ -63,24 +65,24 @@ public sealed class Attribute
     public string Name { get; }
 
     /// <summary>来源 spec 的 SpecName，只读调试信息，不参与运行时行为。</summary>
-    public string SourceSpecName { get; }
+    public string SourceSpecName => _spec.SpecName;
 
     /// <summary>是否为 derived 属性。</summary>
     public bool IsDerived { get; }
 
-    public AttributeValueType MinValue { get; }
+    /// <summary>下限，经由出生 spec 提供。</summary>
+    public AttributeValueType MinValue => _spec.MinValue;
 
-    public AttributeValueType MaxValue { get; }
+    /// <summary>上限，经由出生 spec 提供。</summary>
+    public AttributeValueType MaxValue => _spec.MaxValue;
 
     /// <summary>值变化/失效事件。分发按订阅快照进行：处理器内的订阅/退订不影响当次分发。</summary>
     public event EventHandler<AttributeChangedEventArgs>? ValueChanged;
 
     private Attribute(AttributeSpec spec, bool isDerived)
     {
+        _spec = spec;
         Name = spec.AttributeName;
-        SourceSpecName = spec.SpecName;
-        MinValue = spec.MinValue;
-        MaxValue = spec.MaxValue;
         IsDerived = isDerived;
         _value = NumberOps<AttributeValueType>.Clamp(default, MinValue, MaxValue);
     }
