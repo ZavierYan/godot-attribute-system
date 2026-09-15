@@ -1,6 +1,6 @@
 # Attribute System
 
-Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值层。核心组件四个：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用）。下面按完整使用流程走一遍。
+Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值层。核心组件五个：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用），`AttributePrototypeLibrary` 按名管理可克隆的原型模板。下面按完整使用流程走一遍。
 
 ## 安装
 
@@ -44,7 +44,7 @@ library.Register(new AttributeSpec("attack", 0, 999));
 ```csharp
 var warrior = new AttributeOwnerBuilder(library)
     .Require("strength")                          // base：只要名字
-    .Require("dexterity")
+    .Require("dexterity", 6)                      // base + 初值：构建时钳制到 [min, max]
     .Require("attack", "strength+0.5*dexterity")  // derived：多传一个表达式
     .Build();
 
@@ -61,16 +61,17 @@ var mage = new AttributeOwnerBuilder(library)
 |---|---|
 | Require 的属性名未登记 | 缺失的属性名 |
 | 同一属性名冲突声明（base/derived 混合或重复表达式） | 属性名 |
+| 同一属性名声明两个不同的初值 | 属性名 |
 | Require 传入空白表达式（传入时即抛） | 参数名 |
 | 表达式语法错误（无法解析） | 表达式原文 |
 | 表达式引用了本次未构建的属性名 | 表达式原文 + 属性名 |
 | 表达式循环依赖（含自引用） | 环路上的属性链 |
 
-同一属性名重复声明为 base 是幂等的，其余重复声明一律在构建期报错。
+同一属性名重复声明为 base 是幂等的：初值一致（含都没声明初值）等价于声明一次，只有一方声明初值时取该初值（与声明顺序无关）；其余重复声明（base/derived 混合、重复表达式、两个不同初值）一律在构建期报错。
 
 ### 用原型克隆批量生产 owner
 
-`Build()` 的产物可以当原型：`Clone()` 得到同构成的新实例——值从初始值开始，缓存与事件订阅全新，实例间互不影响。批量生产同类实体（小怪、召唤物等）时先构建原型、再逐个克隆：
+`Build()` 的产物可以当原型：`Clone()` 得到同构成的新实例——base 属性继承原型的当前值（声明的初值即原型的初始值），derived 缓存为空、首次读取时按继承的 base 值重算，事件订阅全新，实例间互不影响。批量生产同类实体（小怪、召唤物等）时先构建原型、再逐个克隆：
 
 ```csharp
 var warriorPrototype = new AttributeOwnerBuilder(library)
@@ -83,6 +84,31 @@ var hero2 = warriorPrototype.Clone();   // 互相独立；克隆也可继续作�
 ```
 
 注意：克隆体与原型共享内部编译产物，**并发求值不安全**——插件所有 API 仅主线程使用。
+
+### 原型库：按名管理多个模板
+
+要在创建角色等场景按名选择模板，用 `AttributePrototypeLibrary` 集中管理：配置期登记（库内执行构建、独占原型引用），创建期按名克隆。登记声明的初值随克隆带出，构建的一切错误在登记时暴露，而不是留到首次克隆时：
+
+```csharp
+var prototypes = new AttributePrototypeLibrary();
+
+// 配置期：登记各职业模板（原型引用不出库，外部拿不到就误改不了）
+prototypes.Register("warrior", new AttributeOwnerBuilder(library)
+    .Require("strength", 15)
+    .Require("attack", "strength * 2"));
+prototypes.Register("mage", new AttributeOwnerBuilder(library)
+    .Require("intelligence", 10)
+    .Require("attack", "intelligence * 1.2"));
+
+// 创建期：按名克隆，登记的初值随克隆带出（warrior 的 strength 从 15 开始）
+var hero = prototypes.Clone("warrior");
+prototypes.TryClone("rogue", out var rogue);      // 未登记：返回 false 而不抛异常
+
+foreach (var name in prototypes.PrototypeNames)   // 列出全部可选模板
+    GD.Print(name);
+```
+
+同名登记会被拒绝；`Contains("warrior")` 可判断模板是否存在。
 
 ## 第 4 步：使用 Owner
 

@@ -147,6 +147,86 @@ public class AttributeOwnerTest
         AssertThat(caught!.Message).Contains("strength *");
     }
 
+    // ---- 初值声明 ----
+
+    [TestCase]
+    public void BaseMemberWithInitialValueStartsFromIt()
+    {
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", (AttributeValueType)15)
+            .Build();
+
+        AssertThat(owner.GetValue("strength")).IsEqual((AttributeValueType)15);
+    }
+
+    [TestCase]
+    public void OutOfRangeInitialValueIsClamped()
+    {
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", -(AttributeValueType)5)
+            .Build();
+
+        AssertThat(owner.GetValue("strength")).IsEqual((AttributeValueType)0);
+    }
+
+    [TestCase]
+    public void MergeOfValuelessAndValuedDeclarationsTakesExplicitValueInAnyOrder()
+    {
+        var first = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("strength", (AttributeValueType)20)
+            .Build();
+        var second = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", (AttributeValueType)20)
+            .Require("strength")
+            .Build();
+
+        AssertBool(first.TryGet("strength", out _)).IsTrue();
+        AssertThat(first.GetValue("strength")).IsEqual((AttributeValueType)20);
+        AssertThat(second.GetValue("strength")).IsEqual((AttributeValueType)20);
+    }
+
+    [TestCase]
+    public void DuplicateIdenticalInitialValueDeclarationIsIdempotent()
+    {
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", (AttributeValueType)15)
+            .Require("strength", (AttributeValueType)15)
+            .Build();
+
+        AssertBool(owner.TryGet("strength", out _)).IsTrue();
+        AssertThat(owner.Attributes.Count()).IsEqual(1);
+        AssertThat(owner.GetValue("strength")).IsEqual((AttributeValueType)15);
+    }
+
+    [TestCase]
+    public void DuplicateNaNInitialValueDeclarationsAreIdempotent()
+    {
+        // 初值一致性比较经 EqualityComparer<T>.Default：NaN 与 NaN 视为一致而非矛盾初值。
+        // 断言依赖浮点别名（NaN 只在 float/double 别名下存在）。
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", AttributeValueType.NaN)
+            .Require("strength", AttributeValueType.NaN)
+            .Build();
+
+        AssertBool(owner.TryGet("strength", out _)).IsTrue();
+        AssertThat(owner.Attributes.Count()).IsEqual(1);
+        AssertBool(float.IsNaN(owner.GetValue("strength"))).IsTrue();
+    }
+
+    [TestCase]
+    public void ConflictingInitialValuesThrowAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength", (AttributeValueType)15)
+            .Require("strength", (AttributeValueType)20)
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("strength");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
     // ---- 声明冲突校验 ----
 
     [TestCase]

@@ -38,15 +38,27 @@ public class AttributeOwnerCloneTest
     }
 
     [TestCase]
-    public void CloneStartsFromInitialValuesNotPrototypeState()
+    public void CloneInheritsPrototypeBaseValues()
     {
         var prototype = CreatePrototype();
         prototype.SetValue("strength", (AttributeValueType)42);
 
         var clone = prototype.Clone();
 
-        AssertThat(clone.GetValue("strength")).IsEqual((AttributeValueType)0);
+        AssertThat(clone.GetValue("strength")).IsEqual((AttributeValueType)42);
         AssertThat(prototype.GetValue("strength")).IsEqual((AttributeValueType)42);
+    }
+
+    [TestCase]
+    public void CloneDerivedRecalculatesFromInheritedBaseValues()
+    {
+        var prototype = CreatePrototype();
+        prototype.SetValue("strength", (AttributeValueType)20);
+
+        var clone = prototype.Clone();
+
+        // 克隆的 attack 缓存为空，首次读取按继承的 strength 重算
+        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)40);
     }
 
     [TestCase]
@@ -70,7 +82,7 @@ public class AttributeOwnerCloneTest
         AssertThat(prototype.GetValue("attack")).IsEqual((AttributeValueType)20); // 原型缓存 20
 
         var clone = prototype.Clone();
-        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)0);      // 克隆从初值算起，不继承缓存
+        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)20);     // 克隆缓存为空，按继承的 strength=10 重算
 
         clone.SetValue("strength", (AttributeValueType)7);
         AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)14);
@@ -111,20 +123,20 @@ public class AttributeOwnerCloneTest
         AssertThat(prototype.GetValue("attack")).IsEqual((AttributeValueType)20);
 
         var clone = prototype.Clone();
-        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)0);
+        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)20); // 按继承的 strength 重算
 
         var prototypeAttackEvents = 0;
         var cloneAttackEvents = 0;
         prototype.Get("attack").ValueChanged += (_, _) => prototypeAttackEvents++;
         clone.Get("attack").ValueChanged += (_, _) => cloneAttackEvents++;
 
-        // 只触发原型的失效传播；克隆的 attack 不失效（缓存仍为 0）
+        // 只触发原型的失效传播；克隆的 attack 不失效（缓存仍为 20）
         prototype.SetValue("strength", (AttributeValueType)15);
 
         AssertThat(prototypeAttackEvents).IsEqual(1);
         AssertThat(cloneAttackEvents).IsEqual(0);
         AssertThat(prototype.GetValue("attack")).IsEqual((AttributeValueType)30);
-        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)0);
+        AssertThat(clone.GetValue("attack")).IsEqual((AttributeValueType)20);
     }
 
     [TestCase]
@@ -138,8 +150,8 @@ public class AttributeOwnerCloneTest
 
         var cloneOfClone = clone.Clone();
 
-        // 再克隆同样从初值开始，构成与表达式不变
-        AssertThat(cloneOfClone.GetValue("strength")).IsEqual((AttributeValueType)0);
+        // 再克隆继承该克隆彼时的当前值，构成与表达式不变
+        AssertThat(cloneOfClone.GetValue("strength")).IsEqual((AttributeValueType)7);
         cloneOfClone.SetValue("strength", (AttributeValueType)10);
         AssertThat(cloneOfClone.GetValue("attack")).IsEqual((AttributeValueType)20);
         AssertThat(clone.GetValue("strength")).IsEqual((AttributeValueType)7);

@@ -76,21 +76,28 @@ public sealed class Attribute
     /// <summary>值变化/失效事件。分发按订阅快照进行：处理器内的订阅/退订不影响当次分发。</summary>
     public event EventHandler<AttributeChangedEventArgs>? ValueChanged;
 
-    private Attribute(AttributeSpec spec, bool isDerived)
+    private Attribute(AttributeSpec spec, bool isDerived, AttributeValueType initialValue)
     {
         _spec = spec;
         Name = spec.AttributeName;
         IsDerived = isDerived;
-        _value = NumberOps<AttributeValueType>.Clamp(default, MinValue, MaxValue);
+        _value = NumberOps<AttributeValueType>.Clamp(initialValue, MinValue, MaxValue);
     }
 
-    internal static Attribute CreateBase(AttributeSpec spec) => new(spec, isDerived: false);
+    internal static Attribute CreateBase(AttributeSpec spec, AttributeValueType initialValue)
+        => new(spec, isDerived: false, initialValue);
 
-    internal static Attribute CreateDerived(AttributeSpec spec) => new(spec, isDerived: true);
+    internal static Attribute CreateBase(AttributeSpec spec)
+        => new(spec, isDerived: false, default);
 
-    /// <summary>克隆：同一出生 spec 与 base/derived 身份，值/缓存/求值器/事件全新（值重置为初始）。
-    /// 求值器由 owner 装配时重新绑定。</summary>
-    internal Attribute CloneAttribute() => new(_spec, IsDerived);
+    internal static Attribute CreateDerived(AttributeSpec spec)
+        => new(spec, isDerived: true, default);
+
+    /// <summary>克隆：同一出生 spec 与 base/derived 身份；base 继承当前值（含构建时声明的初值），
+    /// derived 全新（缓存空，读取时按克隆自身的 base 值重算）；求值器/事件订阅不继承，
+    /// 由 owner 装配时重新绑定。</summary>
+    internal Attribute CloneAttribute()
+        => IsDerived ? CreateDerived(_spec) : CreateBase(_spec, _value);
 
     /// <summary>
     /// 当前值（derived 属性读取时惰性求值并缓存）；写入仅限 base 属性。
