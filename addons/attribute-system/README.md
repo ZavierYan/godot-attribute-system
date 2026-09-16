@@ -1,6 +1,6 @@
 # Attribute System
 
-Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值层。核心组件五个：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用），`AttributePrototypeLibrary` 按名管理可克隆的原型模板。下面按完整使用流程走一遍。
+Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值层。核心组件五个：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用），`AttributePrototypeLibrary` 按名管理可克隆的原型模板。derived 除 plain 表达式外还支持聚合栈形态——builder 以 `RequireStacked` 声明 seed，owner 运行期经 `AddBase`/`AddDerived`/`AddStacked` 注入属性、`Contribute`/`RemoveContribution` 增撤类型化贡献、`RemoveAttribute` 移除属性（见「聚合栈与运行时注入」）。下面按完整使用流程走一遍。
 
 ## 安装
 
@@ -83,7 +83,7 @@ var hero1 = warriorPrototype.Clone();
 var hero2 = warriorPrototype.Clone();   // 互相独立；克隆也可继续作为原型再克隆
 ```
 
-注意：克隆体与原型共享内部编译产物，**并发求值不安全**——插件所有 API 仅主线程使用。
+注意：克隆体与原型共享内部编译产物，**并发求值不安全**——插件所有 API 仅主线程使用。运行时注入的属性与贡献随克隆继承；变异经写时复制在克隆族之间隔离（见「聚合栈与运行时注入」）。
 
 ### 原型库：按名管理多个模板
 
@@ -149,6 +149,79 @@ warrior.Get("attack").ValueChanged += (_, e) =>
 - 处理器里再做订阅/退订是安全的（当次分发不受影响）。
 - 处理器抛出的异常会向上传播给触发变更的调用方。
 
+## 聚合栈与运行时注入
+
+需要"基础值 + 运行期可增撤的叠加项"（buff/debuff、装备词缀等）时，把属性声明为聚合栈 derived：builder 用 `RequireStacked(attributeName, seedExpression)` 声明——seed 表达式同时声明基值计算与依赖关系，聚合栈成员不提供初值，无贡献时的值就是 seed 结果的钳制值。同名冲突规则与 Require 一致：相同 seed 的重复声明幂等，不同 seed 或与 base/plain 混合声明在 Build 时报冲突。
+
+```csharp
+var owner = new AttributeOwnerBuilder(library)
+    .Require("attackbase")                     // 基础攻击力（base）
+    .RequireStacked("attack", "attackbase")    // 聚合栈：seed 同时声明基值计算与依赖
+    .Build();
+
+owner.SetValue("attackbase", 10);
+var attack = owner.GetValue("attack");         // 无贡献时 = seed 的钳制值：10
+```
+
+### 协议
+
+```text
+attack = (seed + Σ flat) × (1 + Σ additive) × Π(1 + multiplicative)
+```
+
+- flat：平添值，直接进加法段（与 seed 同段），可为负做抵消。
+- additive：加法百分比，同池求和后统一乘 (1 + 池和)；池内可正可负、相互抵消。
+- multiplicative：乘法百分比，每条独立乘 (1 + m)，逐条复利、互不合并。
+
+中间段不钳制，最终结果统一钳制到 spec 的 [MinValue, MaxValue]——additive 池和为负产生非正中间值是合法输入，由最终钳制兜底。同一桶内的贡献满足交换律：结果与投入顺序无关，系统没有顺序/优先级维度。
+
+每条贡献是与 plain derived 表达式同等能力的完整 NCalc 表达式：可引用属性、数值常量、条件表达式（如 `hp < 30 ? 0.5 : 0`），其依赖进入聚合栈的依赖并集，依赖变化自动失效重算。
+
+> "百分比只乘某一段"这类分层语义不用贡献表达：先声明普通 derived（如 `attackBaseBoosted = attackbase * 1.5`），聚合栈 seed 指向它——依赖图表达分段，贡献系统表达叠加。
+
+### 运行时注入与撤销
+
+owner 的变异原语（effect/装备系统按需调用，spec 由调用方从 spec 库取得）：
+
+```csharp
+// 运行时添加属性
+owner.AddBase(new AttributeSpec("effectattackbase", 0, 100), 5);   // base + 初值（即时钳制）
+owner.AddDerived(new AttributeSpec("total", 0, 999), "attack + 5");
+owner.AddStacked(new AttributeSpec("burst", 0, 50), "attackbase");
+
+// 投贡献：向聚合栈投一条 flat 贡献，返回撤销专用句柄
+var handle = owner.Contribute("attack", ContributionKind.Flat, "effectattackbase");
+attack = owner.GetValue("attack");         // 15 = 10 + 5，失效事件照常触发
+
+// 撤销：句柄是一次性凭证，重复撤销、跨 owner 使用都会抛异常
+owner.RemoveContribution(handle);
+attack = owner.GetValue("attack");         // 10：回退 seed + 剩余贡献
+
+// 移除属性：仍被引用时拒绝并指明引用方
+owner.RemoveAttribute("effectattackbase");
+```
+
+### 与克隆的关系（写时复制）
+
+- 首次变异前，实例与克隆族共享的内部表先自动私有化：变异不波及既有克隆，克隆上的变异也不影响原型。
+- 变异后的 owner 再克隆：注入的属性与贡献随克隆继承——base 继承彼时当前值，贡献构成照搬。
+
+### 运行时校验
+
+与"构建期错误在 Build 抛"对应，变异的一切错误在变异调用时即抛、owner 状态不变（校验先于任何状态变更）：
+
+| 错误 | 异常信息包含 |
+|---|---|
+| Add 族添加同名属性 | 属性名 |
+| 表达式或 seed 语法错误（即时抛） | 表达式原文 |
+| 表达式或 seed 引用未注入的属性名 | 表达式原文 + 属性名 |
+| 向 base 或 plain derived 投贡献 | 目标属性名与原因 |
+| 贡献构成循环依赖 | 环路上的属性链 |
+| 撤销已撤销过的句柄、其它 owner 的句柄 | 原因说明 |
+| RemoveAttribute 移除仍被引用的属性 | 被移除属性名 + 引用方属性名 |
+| 移除不存在的属性、撤销目标已不存在 | 属性名 |
+| 变异传入空白表达式或 seed（传入时即抛） | 参数名 |
+
 ## 表达式速查
 
 ```text
@@ -167,6 +240,26 @@ total = attack + 5                  可以引用其它 derived 属性
 - 所有 API 仅主线程使用（内部无锁）。
 - spec 的 min/max 是硬性安全护栏（防负数、防溢出），写入与派生结果都会被钳制；"血量上限"这类会变化的游戏上限请建模为独立 attribute，再通过表达式参与计算（如 `Clamp(health, 0, maxHealth)`）。
 - derived 的值永远等于"用依赖当前值重算"的结果，把它当只读视图即可。
+
+## 源码结构
+
+| 文件 | 职责 |
+|---|---|
+| AttributeValueType.cs | 值类型别名（全插件唯一声明点，切换数值类型只改这一行） |
+| AttributeSpec.cs / AttributeSpecLibrary.cs | 属性定义与注册中心 |
+| AttributeOwnerBuilder.cs | 构建器：声明收集、构建期校验、owner 装配 |
+| AttributeOwner.cs | 属性容器：失效传播、克隆与写时复制、运行时注入原语 |
+| Attribute.cs | 运行时属性：读写钳制、derived 缓存、变更/失效事件 |
+| CompiledExpression.cs | NCalc 表达式封装：解析、依赖提取、求值、编译为委托 |
+| IAttributeCalculation.cs | 求值方案统一接口（plain 与聚合栈同签名） |
+| DerivedCalculation.cs | plain derived 求值方案（依赖列表 + 统一求值委托） |
+| StackedCalculation.cs | 聚合栈求值方案：三桶贡献、依赖并集、三段折叠 |
+| ContributionKind.cs | 贡献类型枚举（flat / additive / multiplicative） |
+| ContributionHandle.cs | 贡献句柄：一次性撤销凭证 |
+| AttributeTopology.cs | 计算表拓扑序构建（构建期与运行期共用） |
+| AttributePrototypeLibrary.cs | 原型模板库：按名登记、按名克隆 |
+| Guard.cs / NumberOps.cs | 参数校验 / 泛型数学数值工具 |
+| tests/ | GdUnit4 纯逻辑测试 |
 
 ## 运行测试
 

@@ -14,6 +14,12 @@ internal static class NumberOps<T> where T : INumber<T>, IMinMaxValue<T>
     /// <summary>别名类型的上极值（spec 未指定上限时使用）。</summary>
     public static T TypeMax => T.MaxValue;
 
+    /// <summary>别名类型的加法单位元（零）。</summary>
+    public static T TypeZero => T.AdditiveIdentity;
+
+    /// <summary>别名类型的乘法单位元（一）。</summary>
+    public static T TypeOne => T.One;
+
     /// <summary>把 value 钳制到 [min, max] 区间。</summary>
     public static T Clamp(T value, T min, T max) => T.Clamp(value, min, max);
 }

@@ -296,6 +296,67 @@ public class AttributeOwnerTest
         AssertThat(caught!.Message).Contains("expression");
     }
 
+    // ---- 聚合栈声明 ----
+
+    [TestCase]
+    public void StackedBuildWithoutContributionsReadsClampedSeedValue()
+    {
+        var library = new AttributeSpecLibrary();
+        library.Register(new AttributeSpec("strength", 0, 100));
+        library.Register(new AttributeSpec("attack", 0, 50));
+
+        var owner = new AttributeOwnerBuilder(library)
+            .Require("strength")
+            .RequireStacked("attack", "strength")
+            .Build();
+
+        owner.SetValue("strength", (AttributeValueType)60);
+
+        AssertBool(owner.Get("attack").IsDerived).IsTrue();
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)50);
+    }
+
+    [TestCase]
+    public void DuplicateIdenticalSeedDeclarationIsIdempotent()
+    {
+        var owner = new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .RequireStacked("attack", "strength * 2")
+            .RequireStacked("attack", "strength * 2")
+            .Build();
+
+        AssertBool(owner.TryGet("attack", out _)).IsTrue();
+        AssertThat(owner.Attributes.Count()).IsEqual(2);
+    }
+
+    [TestCase]
+    public void MixedPlainAndStackedDeclarationThrowsAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .Require("attack", "strength * 2")
+            .RequireStacked("attack", "strength * 2")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
+    [TestCase]
+    public void DifferentSeedDeclarationsThrowAtBuild()
+    {
+        var caught = Catch(() => new AttributeOwnerBuilder(CreateLibrary())
+            .Require("strength")
+            .RequireStacked("attack", "strength * 2")
+            .RequireStacked("attack", "strength * 3")
+            .Build());
+
+        AssertThat(caught).IsInstanceOf<InvalidOperationException>();
+        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught.Message).Contains("冲突");
+    }
+
     // ---- 运行时访问 ----
 
     [TestCase]

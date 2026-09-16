@@ -2,12 +2,12 @@
 
 ## Purpose
 
-定义 `AttributeOwner` 的构建协议：`AttributeOwnerBuilder` 依据所需属性名集合从 spec 库取定义，以成员声明携带的表达式声明派生计算、携带初值声明 base 成员，校验（缺失 spec、同名冲突声明、表达式未知引用、循环依赖）并构建出运行时按 AttributeName 访问、可读写 base 值并受最值钳制的属性容器；构建完成的实例可作为原型克隆出新实例（克隆继承原型的 base 当前值），原型可按名登记于原型库并按名克隆。
+定义 `AttributeOwner` 的构建协议：`AttributeOwnerBuilder` 依据所需属性名集合从 spec 库取定义，以成员声明携带的表达式声明派生计算（plain 表达式或聚合栈 seed）、携带初值声明 base 成员，校验（缺失 spec、同名冲突声明、表达式未知引用、循环依赖）并构建出运行时按 AttributeName 访问、可读写 base 值并受最值钳制的属性容器；构建完成的实例可作为原型克隆出新实例（克隆继承原型的 base 当前值），原型可按名登记于原型库并按名克隆。构建完成的实例另支持运行时注入：添加属性、向聚合栈 derived 投撤类型化贡献、移除属性，一切变异错误在变异调用时暴露，变异经写时复制与克隆族隔离、注入随克隆继承。
 
 ## Requirements
 
 ### Requirement: 按属性名集合与表达式声明构建 Owner
-`AttributeOwnerBuilder` SHALL 以 `Require(attributeName)` 声明 base 成员、`Require(attributeName, initialValue)` 声明携带初值的 base 成员、`Require(attributeName, expression)` 声明 derived 成员——成员资格与派生计算一次声明，表达式同时声明该属性的计算方法与依赖关系；derived 成员不提供初值声明（其值只能随表达式求值）。初值 SHALL 在构建时钳制到 spec 的 `[MinValue, MaxValue]` 区间，未声明初值的 base 成员从钳制后的默认值开始。同一属性名的重复 base 声明 SHALL 幂等：初值一致（含均未声明初值）时等价于声明一次，仅一方声明初值时合并取显式初值（与声明顺序无关）；两方声明不同初值、base/derived 混合声明、对同一属性名声明两条表达式 MUST 在构建调用时报错；表达式参数为空白在声明调用时即时抛出。构建产出恰好包含所声明属性名的 `AttributeOwner`，构建完成后 owner 内 SHALL 一律以 AttributeName 标识属性（访问、事件、表达式引用）。
+`AttributeOwnerBuilder` SHALL 以 `Require(attributeName)` 声明 base 成员、`Require(attributeName, initialValue)` 声明携带初值的 base 成员、`Require(attributeName, expression)` 声明 derived 成员、`RequireStacked(attributeName, seedExpression)` 声明聚合栈 derived 成员——成员资格与派生计算一次声明，表达式（含 seed）同时声明该属性的计算方法与依赖关系；derived 成员（plain 与聚合栈）不提供初值声明（其值只能随表达式求值）。初值 SHALL 在构建时钳制到 spec 的 `[MinValue, MaxValue]` 区间，未声明初值的 base 成员从钳制后的默认值开始。同一属性名的重复 base 声明 SHALL 幂等：初值一致（含均未声明初值）时等价于声明一次，仅一方声明初值时合并取显式初值（与声明顺序无关）；相同 seed 的重复聚合栈声明等价于声明一次。两方声明不同初值、base/derived 混合声明、对同一属性名声明两条表达式、对同一属性名混合声明 plain 与聚合栈 derived、或对同一属性名声明两个不同的 seed MUST 在构建调用时报错；表达式参数（含 seed）为空白在声明调用时即时抛出。构建产出恰好包含所声明属性名的 `AttributeOwner`，构建完成后 owner 内 SHALL 一律以 AttributeName 标识属性（访问、事件、表达式引用）。
 
 #### Scenario: 构建成功
 - **WHEN** 依次向 builder 声明 `Require(strength)`、`Require(dexterity)`、`Require(attack, strength+0.5*dexterity)`（属性定义均已在 spec 库登记）并调用构建
@@ -48,6 +48,22 @@
 #### Scenario: 声明空白表达式
 - **WHEN** `Require(attack, ...)` 的表达式参数为空字符串或纯空白字符
 - **THEN** 声明调用立即抛出异常，错误信息指明表达式非法
+
+#### Scenario: 声明聚合栈成员构建成功
+- **WHEN** 依次声明 `Require(attackbase)` 与 `RequireStacked(attack, attackbase)` 并调用构建
+- **THEN** 构建成功，`attack` 为聚合栈 derived，尚无贡献时读取得到 seed 的钳制值
+
+#### Scenario: 相同 seed 的重复聚合栈声明幂等
+- **WHEN** 同一属性名 `attack` 先后两次声明 `RequireStacked(attack, attackbase)` 后调用构建
+- **THEN** 构建成功，owner 中恰好包含一个 `attack` 属性
+
+#### Scenario: plain 与聚合栈混合声明被拒绝
+- **WHEN** 对同一属性名 `attack` 以任一顺序先后声明 `Require(attack, strength*2)` 与 `RequireStacked(attack, attackbase)`，随后调用构建
+- **THEN** 构建抛出异常，错误信息指明 `attack` 存在冲突的重复声明
+
+#### Scenario: 同一属性名两个不同 seed 声明被拒绝
+- **WHEN** 对同一属性名 `attack` 先后声明 `RequireStacked(attack, attackbase)` 与 `RequireStacked(attack, strength)`，随后调用构建
+- **THEN** 构建抛出异常，错误信息指明 `attack` 存在冲突的重复声明
 
 ### Requirement: 构建期校验缺失的 spec
 当传入的属性名未在 spec 库登记时，构建 MUST 失败并抛出异常，错误信息指明缺失的属性名。
@@ -100,7 +116,7 @@ base 属性的值 SHALL 可直接设置与读取；设置时值 MUST 被钳制�
 - **THEN** 抛出异常，错误信息说明该属性为 derived 不可写
 
 ### Requirement: prototype 克隆继承 base 当前值
-任一构建完成的 owner 可作为原型，克隆产出与其构成相同的新 owner 实例。克隆实例与原型共享静态构成（属性 spec 引用、编译后的求值委托、依赖图与拓扑序）；运行时状态：base 属性 SHALL 继承原型的当前值（构建时声明的初值即原型的初始当前值），derived 属性缓存为空、首次读取时依克隆自身的 base 值惰性重算，事件订阅 MUST 不继承。原型与各克隆实例之间、克隆与克隆之间的属性值与失效传播 MUST 互不影响。克隆实例 SHALL 可继续作为原型再次克隆，继承其彼时的 base 当前值。
+任一构建完成的 owner 可作为原型，克隆产出与其构成相同的新 owner 实例——构成 SHALL 包括构建期声明的属性与运行时注入的属性及贡献。克隆实例与原型共享静态构成（属性 spec 引用、编译后的求值委托、依赖图与拓扑序）；运行时状态：base 属性 SHALL 继承原型的当前值（构建时声明的初值即原型的初始当前值，运行时添加的 base 属性同样继承彼时当前值），derived 属性缓存为空、首次读取时依克隆自身的 base 值惰性重算，事件订阅 MUST 不继承。原型与各克隆实例之间、克隆与克隆之间的属性值与失效传播 MUST 互不影响；对任一实例的运行时注入或撤销（添加/移除属性、增撤贡献）MUST 不改变其它实例的构成与值——变异实例 SHALL 先与其克隆族拆分共享的静态构成（写时复制），再行变异。克隆实例 SHALL 可继续作为原型再次克隆，继承其彼时的 base 当前值与贡献构成。
 
 #### Scenario: 克隆得到同构成实例
 - **WHEN** 克隆一个包含 `strength`（base）与 `attack`（表达式 `strength * 2`）的 owner
@@ -129,6 +145,18 @@ base 属性的值 SHALL 可直接设置与读取；设置时值 MUST 被钳制�
 #### Scenario: 克隆可再克隆
 - **WHEN** 对一个已被写值的克隆实例再次克隆
 - **THEN** 得到同样构成的新实例，其 base 属性继承该克隆彼时的当前值
+
+#### Scenario: 克隆继承运行时注入
+- **WHEN** 原型注入 base 属性 `effectattackbase`（值 5）并向聚合栈 `attack` 投入 flat 贡献，随后克隆
+- **THEN** 克隆包含 `effectattackbase`（值 5），读取 `attack` 得到含该贡献的求值结果
+
+#### Scenario: 变异不波及既有克隆
+- **WHEN** 原型已有克隆，随后原型投入新贡献或添加/移除属性
+- **THEN** 克隆的构成与值不受影响，其读取仍按原构成求值
+
+#### Scenario: 克隆上的变异不影响原型
+- **WHEN** 向克隆实例投入贡献或添加属性
+- **THEN** 原型的构成与值不受影响
 
 ### Requirement: 按名登记原型并从原型克隆
 `AttributePrototypeLibrary` SHALL 以原型名为键登记原型：`Register(prototypeName, builder)` 在库内执行构建并以原型名索引保存构建产物，原型实例 MUST 不向登记方暴露（库外仅能经克隆获得新实例）。原型名库内唯一，同名登记 MUST 被拒绝；空白原型名在登记调用时即时抛出。builder 的一切构建期错误（缺失 spec、同名冲突声明、表达式语法错误、表达式未知引用、循环依赖）SHALL 在登记时暴露。`Clone(prototypeName)` SHALL 产出该原型的克隆；未登记的原型名 MUST 抛出异常，错误信息包含该原型名。库 SHALL 另提供尝试克隆、存在判断与已登记原型名的枚举。
@@ -160,3 +188,76 @@ base 属性的值 SHALL 可直接设置与读取；设置时值 MUST 被钳制�
 #### Scenario: 枚举已登记的原型名
 - **WHEN** 库中登记了 `warrior` 与 `mage` 两个原型
 - **THEN** 原型名枚举恰包含 `warrior` 与 `mage`
+
+### Requirement: 运行时注入属性
+构建完成的 owner SHALL 支持在运行时添加属性：添加 base 属性（可携带初值，初值即时钳制到 spec 区间）、添加 plain derived 属性（以表达式声明计算方法与依赖关系）、添加聚合栈 derived 属性（以 seed 表达式声明）。添加的属性与构建期声明的属性行为一致：以 AttributeName 访问、读写限制与钳制规则相同、derived 懒求值并参与失效传播与事件。同名属性已存在 MUST 在添加调用时拒绝；表达式（含 seed）语法错误、引用 owner 中不存在的属性名 MUST 在添加调用时抛出，错误信息包含表达式文本与未解析的属性名。
+
+#### Scenario: 运行时添加 base 属性并读写
+- **WHEN** 构建完成后向 owner 添加 base 属性 `effectattackbase`（spec [0, 100]，初值 5），读取后再写为 8 与 -5
+- **THEN** 首次读取得到 5，写 8 后得到 8，写 -5 后得到 0（钳制）
+
+#### Scenario: 运行时添加 plain derived 属性
+- **WHEN** 向已含 `attack` 与 `luck` 的 owner 添加 derived `total`（表达式 `attack + luck`），读取后改写 `luck`
+- **THEN** 首次读取按表达式求值；`luck` 变化使 `total` 失效，再次读取得到新值
+
+#### Scenario: 运行时添加聚合栈 derived 属性
+- **WHEN** 向已含 `defensebase` 的 owner 添加聚合栈 `defense`（seed `defensebase`），投入 flat 贡献 `shield`（值 3，`defensebase` 为 10）后读取
+- **THEN** 得到 13
+
+#### Scenario: 添加同名属性被拒绝
+- **WHEN** 向已包含 `strength` 的 owner 添加 `strength`
+- **THEN** 添加调用抛出异常，错误信息包含 `strength`；既有 `strength` 属性不受影响
+
+#### Scenario: 添加的表达式引用不存在的属性
+- **WHEN** 向 owner 添加 derived 属性，表达式引用 owner 中不存在的 `ghost`
+- **THEN** 添加调用抛出异常，错误信息同时包含表达式文本与 `ghost`
+
+#### Scenario: 添加的表达式语法错误
+- **WHEN** 向 owner 添加 derived 属性，表达式为 `strength *`
+- **THEN** 添加调用抛出异常，错误信息包含该表达式内容
+
+### Requirement: 运行时贡献与撤销
+聚合栈 derived SHALL 接受运行时类型化贡献：贡献操作指定目标属性名、贡献类型（flat / additive / multiplicative）与贡献表达式，返回可用于撤销的贡献句柄。贡献表达式 SHALL 为完整表达式，其引用的每个属性名 MUST 已存在于 owner，未解析引用与语法错误 MUST 在贡献调用时抛出。目标属性不存在、或存在但不是聚合栈 derived（base 或 plain derived）MUST 在贡献调用时抛出。贡献生效后目标及其下游沿既有依赖图失效，复用既有失效传播与事件（含惰性新值）。贡献表达式引用的属性（直接或间接）依赖目标属性自身时构成循环，MUST 在贡献调用时抛出循环依赖异常。撤销贡献 SHALL 按句柄进行，撤销后目标失效并按剩余贡献重算；重复撤销同一句柄、以其它 owner 的句柄撤销 MUST 抛出。
+
+#### Scenario: 投入贡献后失效重算
+- **WHEN** 聚合栈 `attack`（seed `attackbase` 值 10）已被读取为 10，投入 flat 贡献 `effectattackbase`（值 5）后再次读取
+- **THEN** 得到 15；投入使 `attack` 失效并发出失效事件（事件的新值为惰性求值）
+
+#### Scenario: 贡献依赖的属性变化时失效
+- **WHEN** flat 贡献 `effectattackbase` 在位，`effectattackbase` 被写为 7
+- **THEN** `attack` 缓存失效，再次读取得到 seed + 7
+
+#### Scenario: 向非聚合栈目标投贡献被拒绝
+- **WHEN** 向 plain derived 属性或 base 属性投贡献
+- **THEN** 贡献调用抛出异常，错误信息指明目标不接受贡献
+
+#### Scenario: 贡献表达式引用不存在的属性
+- **WHEN** 贡献表达式引用 owner 中不存在的 `ghost`
+- **THEN** 贡献调用抛出异常，错误信息同时包含表达式文本与 `ghost`
+
+#### Scenario: 贡献构成循环依赖被拒绝
+- **WHEN** 聚合栈 `attack` 尚无该依赖，投入引用 `total` 的贡献，而 `total`（直接或间接）依赖 `attack`
+- **THEN** 贡献调用抛出循环依赖异常，错误信息包含环路上的属性名；贡献未生效
+
+#### Scenario: 按句柄撤销贡献
+- **WHEN** 撤销一个 flat 贡献的句柄后读取目标，随后再次撤销同一句柄
+- **THEN** 目标按剩余贡献重算；再次撤销抛出异常
+
+#### Scenario: 跨 owner 的句柄被拒绝
+- **WHEN** 以 owner A 上获得的贡献句柄向同构成的 owner B 发起撤销
+- **THEN** 撤销调用抛出异常
+
+### Requirement: 移除属性
+构建完成的 owner SHALL 支持按属性名移除属性；当属性被任何 derived 表达式、聚合栈 seed 或贡献项引用时，移除 MUST 被拒绝且错误信息指明引用方。移除成功后该属性名不可再访问，owner 其余属性的值与失效传播不受影响。
+
+#### Scenario: 移除未被引用的属性
+- **WHEN** 移除未被任何表达式或贡献引用的 base 属性 `luck`
+- **THEN** 移除后按 `luck` 访问抛出异常；其余属性读写与失效传播不受影响
+
+#### Scenario: 移除被引用的属性被拒绝
+- **WHEN** 移除被 `attack` 的表达式引用的 `strength`
+- **THEN** 移除调用抛出异常，错误信息包含 `strength` 与引用方 `attack`；`strength` 仍可正常访问
+
+#### Scenario: 撤销全部引用后可移除
+- **WHEN** `effectattackbase` 仅被一条 flat 贡献引用，撤销该贡献后移除 `effectattackbase`
+- **THEN** 移除成功
