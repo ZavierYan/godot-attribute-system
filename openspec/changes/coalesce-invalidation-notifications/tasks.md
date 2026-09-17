@@ -10,6 +10,6 @@
 
 ## 3. 文档与规格同步
 
-- [ ] 3.1 `README.md` 观察节：订阅示例注释与要点补合并语义（已失效未重算期间不重复通知，读取重算后再次变更会重新通知；旧值为失效前缓存值）。验证：措辞与 delta 场景一一对应。
+- [x] 3.1 `README.md` 观察节：订阅示例注释与要点补合并语义（已失效未重算期间不重复通知，读取重算后再次变更会重新通知；旧值为失效前缓存值）。验证：措辞与 delta 场景一一对应。
 - [ ] 3.2 直改主规格 `openspec/specs/attribute-observation/spec.md` 的 Purpose，补"失效通知按脏状态迁移合并（已失效不重复通知）"句（delta 不携带 Purpose）。验证：`openspec validate --specs --strict` 绿。
 - [ ] 3.3 收尾验证：`dotnet build`（仅既有 CS8600 @ CompiledExpression.cs:53）+ `dotnet test` 116/116 + `openspec validate coalesce-invalidation-notifications --strict` 全绿。

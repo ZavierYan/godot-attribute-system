@@ -138,6 +138,7 @@ warrior.Get("strength").ValueChanged += (_, e) =>
     GD.Print($"{e.Name}: {e.OldValue} -> {e.NewValue}");
 
 // derived：依赖变化时收到"失效"通知。
+// 已失效（尚未重算）期间不重复通知，读取重算后再次变更会重新通知
 // e.NewValue 是惰性的——处理器里访问它才触发重算，不访问不求值
 warrior.Get("attack").ValueChanged += (_, e) =>
     GD.Print($"attack 已失效，新值是 {e.NewValue}");
@@ -145,6 +146,7 @@ warrior.Get("attack").ValueChanged += (_, e) =>
 
 说明：
 
+- 失效通知按脏状态迁移合并：连续多次变更在下次读取前至多通知一次，旧值为失效前的缓存值。
 - 通知按依赖顺序分发：`attack` 先于依赖它的 `total` 收到。
 - 处理器里再做订阅/退订是安全的（当次分发不受影响）。
 - 处理器抛出的异常会向上传播给触发变更的调用方。
