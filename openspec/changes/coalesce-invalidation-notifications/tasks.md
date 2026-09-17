@@ -1,6 +1,6 @@
 ## 1. 源码：失效剪枝与脏状态查询
 
-- [ ] 1.1 `Attribute.cs` 新增 `internal bool IsDirty`（`IsDerived && !_hasCachedValue`，注释写明脏定义与剪枝不变量），同步 `AttributeChangedEventArgs` 与类文档注释中 OldValue 的措辞（失效前缓存值；"从未计算过则为 null"路径已不可达）。验证：`dotnet build` 0 错误（仅既有 CS8600）。
+- [x] 1.1 `Attribute.cs` 新增 `internal bool IsDirty`（`IsDerived && !_hasCachedValue`，注释写明脏定义与剪枝不变量），同步 `AttributeChangedEventArgs` 与类文档注释中 OldValue 的措辞（失效前缓存值；"从未计算过则为 null"路径已不可达）。验证：`dotnet build` 0 错误（仅既有 CS8600）。
 - [ ] 1.2 `AttributeOwner.InvalidateDependents` BFS 剪枝：`visited` 去重后在 `IsDerived` 分支内查 `IsDirty` 即 `continue`（不加入 affected、不展开下游），根统一处理不特判；方法注释重写（不变量、合并语义、并集闭包保证，作为后续变异路径的演进约束）。验证：`dotnet build` 0 错误；全量测试中仅 `ObservationTest.DerivedOldValueIsNullWhenNeverComputed` 预期失败（锁定旧语义，2.1 的改写对象），其余全绿。
 
 ## 2. 测试：合并语义锁定

@@ -3,8 +3,8 @@ namespace AttributeSystem;
 /// <summary>
 /// 属性值变更事件参数。
 /// <para>base 变更事件：OldValue 为旧值，NewValue 直接可得。</para>
-/// <para>derived 失效事件：OldValue 为失效前的缓存快照（从未计算过则为 null）；
-/// NewValue 以惰性方式暴露——仅当订阅方访问时才触发重算，未访问不产生求值。</para>
+/// <para>derived 失效事件：OldValue 为失效前的缓存快照——失效通知仅在缓存由有效转为失效时发出，
+/// 故该值正常恒非空，null 仅作为防御性取值保留；NewValue 以惰性方式暴露——仅当订阅方访问时才触发重算，未访问不产生求值。</para>
 /// </summary>
 public sealed class AttributeChangedEventArgs : EventArgs
 {
@@ -14,7 +14,7 @@ public sealed class AttributeChangedEventArgs : EventArgs
     /// <summary>发生变化的属性名（AttributeName）。</summary>
     public string Name { get; }
 
-    /// <summary>旧值；derived 从未计算过时为 null。</summary>
+    /// <summary>旧值；derived 失效事件中为失效前的缓存快照，正常恒非空（null 仅为防御性取值）。</summary>
     public AttributeValueType? OldValue { get; }
 
     /// <summary>新值。derived 失效事件中首次访问时触发重算（重算结果同时写入缓存，多次访问至多重算一次）。</summary>
@@ -66,6 +66,11 @@ public sealed class Attribute
 
     /// <summary>是否为 derived 属性。</summary>
     public bool IsDerived { get; }
+
+    /// <summary>是否处于脏状态（仅 derived 有意义）：缓存为空，即尚未计算过、或已失效且尚未重算。
+    /// 该查询支撑 owner 失效 BFS 的剪枝不变量——若 derived 为脏，则其全部传递下游亦为脏
+    /// （失效波按完整闭包标脏、读取只洗净被读节点的上游闭包，归纳可得）。</summary>
+    internal bool IsDirty => IsDerived && !_hasCachedValue;
 
     /// <summary>下限，经由出生 spec 提供。</summary>
     public AttributeValueType MinValue => _spec.MinValue;
@@ -140,7 +145,8 @@ public sealed class Attribute
         _evaluator = evaluator;
     }
 
-    /// <summary>owner 失效时调用：清空缓存并返回失效前的缓存快照（从未计算过则为 null）。</summary>
+    /// <summary>owner 失效时调用：清空缓存并返回失效前的缓存快照（正常必有缓存值；
+    /// 从未计算过则返回 null，该防御性分支在新通知语义下不可达）。</summary>
     internal AttributeValueType? TakeInvalidationSnapshot()
     {
         var snapshot = _hasCachedValue ? _value : (AttributeValueType?)null;
