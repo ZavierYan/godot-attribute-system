@@ -183,6 +183,34 @@ public class ObservationTest
     }
 
     [TestCase]
+    public void ConsecutiveWritesWithoutReadCoalesceIntoOneNotification()
+    {
+        var owner = CreateChainOwner();
+        owner.SetValue("strength", (AttributeValueType)10);
+        // 初始读取洗净两个 derived：attack=20、total=25
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)20);
+        AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)25);
+
+        var attackCount = 0;
+        var totalCount = 0;
+        owner.Get("attack").ValueChanged += (_, _) => attackCount++;
+        owner.Get("total").ValueChanged += (_, _) => totalCount++;
+
+        owner.SetValue("strength", (AttributeValueType)15);
+        AssertThat(attackCount).IsEqual(1);
+        AssertThat(totalCount).IsEqual(1);
+
+        // 场景「连续变更且中间未读取合并为一次通知」：第二次写入并入同一次待重算，
+        // 已脏分支被剪枝，不重复通知
+        owner.SetValue("strength", (AttributeValueType)20);
+        AssertThat(attackCount).IsEqual(1);
+        AssertThat(totalCount).IsEqual(1);
+
+        // 读取 total 得到级联两次写入的新值：剪枝后闭包失效仍完整（并集闭包保证）
+        AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)45);
+    }
+
+    [TestCase]
     public void NotificationsFollowTopologicalOrder()
     {
         var owner = CreateChainOwner();

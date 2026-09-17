@@ -6,7 +6,7 @@
 ## 2. 测试：合并语义锁定
 
 - [x] 2.1 改写 `ObservationTest.DerivedOldValueIsNullWhenNeverComputed` 为合并语义：从未读取期间写依赖不通知、首读得到新值、读取洗净后再次变更收到通知且 OldValue 为读取值。验证：该用例绿。
-- [ ] 2.2 新增 2 例：`ObservationTest.ConsecutiveWritesWithoutReadCoalesceIntoOneNotification`（订阅 attack 与 total，两次写中间不读计数不变，读 total 得级联新值）、`RuntimeInjectionTest.ContributionOnDirtyTargetCoalescesNotification`（目标未读取时投贡献无通知、读取得含贡献值，读后再投收到通知且 OldValue 为上次读取值）。验证：`dotnet test` 全量 **116/116** 绿。
+- [x] 2.2 新增 2 例：`ObservationTest.ConsecutiveWritesWithoutReadCoalesceIntoOneNotification`（订阅 attack 与 total，两次写中间不读计数不变，读 total 得级联新值）、`RuntimeInjectionTest.ContributionOnDirtyTargetCoalescesNotification`（目标未读取时投贡献无通知、读取得含贡献值，读后再投收到通知且 OldValue 为上次读取值）。验证：`dotnet test` 全量 **116/116** 绿。
 
 ## 3. 文档与规格同步
 
