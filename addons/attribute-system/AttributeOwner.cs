@@ -439,9 +439,16 @@ public sealed class AttributeOwner
         => this[attributeName].BindEvaluator(
             () => calculation.Calculator(GetDependencyValues(calculation.Dependencies)));
 
-    /// <summary>失效传播：以 source 为根沿依赖图收集受影响 derived——含根自身
-    /// （贡献路径以聚合栈 derived 为根、必须失效其自身；base 写值路径的根是 base、
-    /// 天然不在收集集，行为不变），随后两阶段处理。</summary>
+    /// <summary>失效传播：以 source 为根沿依赖图收集受影响 derived——含根自身（贡献路径以聚合栈
+    /// derived 为根、必须失效其自身；base 写值路径的根是 base、天然不在收集集），随后两阶段处理。
+    /// 剪枝：出队去重后，已脏 derived（Attribute.IsDirty）直接跳过——不加入收集集（不重发通知、
+    /// 不做空操作快照）、不展开其下游；根统一适用同一规则、不特判。
+    /// 剪枝不变量：若 derived 为脏，则其全部传递下游亦为脏——失效波按完整闭包标脏、读取只洗净
+    /// 被读节点的上游闭包，归纳可得。并集闭包保证：带剪枝的波"新标脏 ∪ 原有脏"仍等于完整闭包，
+    /// 任何读取都拿不到过期缓存。合并语义：失效通知仅在缓存由有效转为失效时发出，已脏期间
+    /// 后续变更不重复通知，读取即得含全部变更的新值。
+    /// 演进约束：未来新增任何标脏/失效来源的变异路径，都必须维持"完整闭包标脏"——
+    /// 只标脏部分下游会破坏不变量，使剪枝漏掉仍持过期缓存的下游。</summary>
     internal void InvalidateDependents(Attribute source)
     {
         if (_directDependents.Count == 0)
@@ -459,7 +466,12 @@ public sealed class AttributeOwner
                 continue;
             var attribute = _attributes[name];
             if (attribute.IsDerived)
+            {
+                // 已脏：整支剪枝——不重发通知、不展开下游（不变量：脏的传递下游必已脏，波后并集闭包仍完整）
+                if (attribute.IsDirty)
+                    continue;
                 (affected ??= new List<Attribute>()).Add(attribute);
+            }
             if (_directDependents.TryGetValue(name, out var next))
                 foreach (var n in next)
                     queue.Enqueue(n);
