@@ -137,24 +137,33 @@ public class ObservationTest
     }
 
     [TestCase]
-    public void DerivedOldValueIsNullWhenNeverComputed()
+    public void NeverReadDerivedStaysSilentUntilFirstRead()
     {
         var owner = CreateChainOwner();
         owner.SetValue("strength", (AttributeValueType)10);
 
+        var eventCount = 0;
         AttributeValueType? oldValue = null;
-        var hasOldValue = true;
         owner.Get("attack").ValueChanged += (_, e) =>
         {
+            eventCount++;
             oldValue = e.OldValue;
-            hasOldValue = e.OldValue.HasValue;
         };
 
+        // 场景「从未读取过的 derived 首次读取前不通知」：attack 出生即脏、从未读取，
+        // 期间依赖变更并入待重算，不发出失效通知
         owner.SetValue("strength", (AttributeValueType)15);
+        AssertThat(eventCount).IsEqual(0);
 
-        // attack 从未被读取，失效事件不携带旧值
-        AssertBool(hasOldValue).IsFalse();
-        AssertBool(oldValue.HasValue).IsFalse();
+        // 首次读取得到按当前依赖值计算的结果
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)30);
+
+        // 场景「失效后读取重算，再次变更重新通知」：读取已洗净缓存，
+        // 再次变更重新通知，OldValue 为上次读取的缓存值
+        owner.SetValue("strength", (AttributeValueType)20);
+        AssertThat(eventCount).IsEqual(1);
+        AssertBool(oldValue.HasValue).IsTrue();
+        AssertThat(oldValue!.Value).IsEqual((AttributeValueType)30);
     }
 
     [TestCase]
