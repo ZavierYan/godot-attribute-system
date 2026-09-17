@@ -146,6 +146,37 @@ public class RuntimeInjectionTest
     }
 
     [TestCase]
+    public void ContributionOnDirtyTargetCoalescesNotification()
+    {
+        var owner = CreateOwnerWithStrength();
+        owner.AddStacked(new AttributeSpec("attack", 0, 50), "strength");
+        owner.SetValue("strength", (AttributeValueType)10); // attack 从未读取：出生即脏
+
+        var eventCount = 0;
+        AttributeChangedEventArgs? received = null;
+        owner.Get("attack").ValueChanged += (_, args) =>
+        {
+            eventCount++;
+            received = args;
+        };
+
+        // 场景「合并语义（贡献路径）」：目标已脏，贡献并入同一次待重算，整波剪枝无通知
+        owner.Contribute("attack", ContributionKind.Flat, "5");
+        AssertThat(eventCount).IsEqual(0);
+
+        // 读取即得含贡献的新值
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)15);
+
+        // 读取洗净后再投贡献：重新通知，OldValue 为上次读取的缓存值
+        owner.Contribute("attack", ContributionKind.Flat, "3");
+        AssertThat(eventCount).IsEqual(1);
+        AssertThat(received).IsNotNull();
+        AssertThat(received!.Name).IsEqual("attack");
+        AssertThat(received.OldValue).IsEqual((AttributeValueType)15);
+        AssertThat(received.NewValue).IsEqual((AttributeValueType)18);
+    }
+
+    [TestCase]
     public void ContributionDependencyChangeInvalidates()
     {
         var owner = CreateStackedOwner();

@@ -137,24 +137,33 @@ public class ObservationTest
     }
 
     [TestCase]
-    public void DerivedOldValueIsNullWhenNeverComputed()
+    public void NeverReadDerivedStaysSilentUntilFirstRead()
     {
         var owner = CreateChainOwner();
         owner.SetValue("strength", (AttributeValueType)10);
 
+        var eventCount = 0;
         AttributeValueType? oldValue = null;
-        var hasOldValue = true;
         owner.Get("attack").ValueChanged += (_, e) =>
         {
+            eventCount++;
             oldValue = e.OldValue;
-            hasOldValue = e.OldValue.HasValue;
         };
 
+        // 场景「从未读取过的 derived 首次读取前不通知」：attack 出生即脏、从未读取，
+        // 期间依赖变更并入待重算，不发出失效通知
         owner.SetValue("strength", (AttributeValueType)15);
+        AssertThat(eventCount).IsEqual(0);
 
-        // attack 从未被读取，失效事件不携带旧值
-        AssertBool(hasOldValue).IsFalse();
-        AssertBool(oldValue.HasValue).IsFalse();
+        // 首次读取得到按当前依赖值计算的结果
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)30);
+
+        // 场景「失效后读取重算，再次变更重新通知」：读取已洗净缓存，
+        // 再次变更重新通知，OldValue 为上次读取的缓存值
+        owner.SetValue("strength", (AttributeValueType)20);
+        AssertThat(eventCount).IsEqual(1);
+        AssertBool(oldValue.HasValue).IsTrue();
+        AssertThat(oldValue!.Value).IsEqual((AttributeValueType)30);
     }
 
     [TestCase]
@@ -171,6 +180,34 @@ public class ObservationTest
 
         AssertBool(oldValue.HasValue).IsTrue();
         AssertThat(oldValue!.Value).IsEqual((AttributeValueType)20);
+    }
+
+    [TestCase]
+    public void ConsecutiveWritesWithoutReadCoalesceIntoOneNotification()
+    {
+        var owner = CreateChainOwner();
+        owner.SetValue("strength", (AttributeValueType)10);
+        // 初始读取洗净两个 derived：attack=20、total=25
+        AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)20);
+        AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)25);
+
+        var attackCount = 0;
+        var totalCount = 0;
+        owner.Get("attack").ValueChanged += (_, _) => attackCount++;
+        owner.Get("total").ValueChanged += (_, _) => totalCount++;
+
+        owner.SetValue("strength", (AttributeValueType)15);
+        AssertThat(attackCount).IsEqual(1);
+        AssertThat(totalCount).IsEqual(1);
+
+        // 场景「连续变更且中间未读取合并为一次通知」：第二次写入并入同一次待重算，
+        // 已脏分支被剪枝，不重复通知
+        owner.SetValue("strength", (AttributeValueType)20);
+        AssertThat(attackCount).IsEqual(1);
+        AssertThat(totalCount).IsEqual(1);
+
+        // 读取 total 得到级联两次写入的新值：剪枝后闭包失效仍完整（并集闭包保证）
+        AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)45);
     }
 
     [TestCase]
