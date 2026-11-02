@@ -5,10 +5,10 @@ using static AttributeSystem.Tests.TestHelpers;
 namespace AttributeSystem.Tests;
 
 [TestSuite]
-public class CompiledExpressionTest
+public class CompiledExpressionTest // NOSONAR S1118: gdUnit4 fixture 要求公共无参构造器，与静态类/保护构造器冲突
 {
     [TestCase]
-    public void ExtractsDependenciesFromIdentifiers()
+    public static void ExtractsDependenciesFromIdentifiers()
     {
         var compiled = new CompiledExpression("strength+0.5*dexterity");
 
@@ -17,7 +17,7 @@ public class CompiledExpressionTest
     }
 
     [TestCase]
-    public void EvaluatesArithmeticWithDependencyValues()
+    public static void EvaluatesArithmeticWithDependencyValues()
     {
         var compiled = new CompiledExpression("strength+0.5*dexterity");
 
@@ -31,7 +31,7 @@ public class CompiledExpressionTest
     }
 
     [TestCase]
-    public void BuiltInFunctionNamesAreNotDependencies()
+    public static void BuiltInFunctionNamesAreNotDependencies()
     {
         var compiled = new CompiledExpression("Max(attack - debuff, 0)");
 
@@ -40,7 +40,7 @@ public class CompiledExpressionTest
     }
 
     [TestCase]
-    public void EvaluatesBuiltInFunction()
+    public static void EvaluatesBuiltInFunction()
     {
         var compiled = new CompiledExpression("Max(attack - debuff, 0)");
 
@@ -54,16 +54,16 @@ public class CompiledExpressionTest
     }
 
     [TestCase]
-    public void SyntaxErrorThrowsAtCompileTimeWithExpressionText()
+    public static void SyntaxErrorThrowsAtCompileTimeWithExpressionText()
     {
-        var caught = Catch(() => new CompiledExpression("strength *"));
+        var caught = Catch(() => _ = new CompiledExpression("strength *"));
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
         AssertThat(caught!.Message).Contains("strength *");
     }
 
     [TestCase]
-    public void UnboundDependencyFailsEvaluationWithExpressionText()
+    public static void UnboundDependencyFailsEvaluationWithExpressionText()
     {
         var compiled = new CompiledExpression("strength * 2");
 

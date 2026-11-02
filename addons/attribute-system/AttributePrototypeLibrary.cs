@@ -47,5 +47,5 @@ public sealed class AttributePrototypeLibrary
     public bool Contains(string prototypeName) => _prototypes.ContainsKey(prototypeName);
 
     /// <summary>全部已登记的原型名（快照，当次枚举不受后续登记影响）。</summary>
-    public IReadOnlyCollection<string> PrototypeNames => _prototypes.Keys.ToArray();
+    public IReadOnlyCollection<string> PrototypeNames() => _prototypes.Keys.ToArray();
 }

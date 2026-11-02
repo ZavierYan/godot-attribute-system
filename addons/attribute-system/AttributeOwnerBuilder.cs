@@ -52,6 +52,15 @@ public sealed class AttributeOwnerBuilder
         return this;
     }
 
+    /// <summary>按属性名批量声明 base 成员。</summary>
+    public AttributeOwnerBuilder Require(IEnumerable<string> attributeNames)
+    {
+        ArgumentNullException.ThrowIfNull(attributeNames);
+        foreach (var attributeName in attributeNames)
+            Require(attributeName);
+        return this;
+    }
+
     /// <summary>声明一个聚合栈 derived 成员：seed 表达式同时声明基值计算与依赖关系，
     /// 聚合栈成员不提供初值，无贡献时的值即 seed 结果的钳制值，贡献经 owner 运行期增撤。
     /// seed 空白在声明调用时即时抛出；同名冲突声明在 Build 时与其它构建期校验一并暴露——
@@ -61,15 +70,6 @@ public sealed class AttributeOwnerBuilder
         Guard.NotBlank(attributeName, nameof(attributeName));
         Guard.NotBlank(seedExpression, nameof(seedExpression));
         AddRequired(attributeName, expression: null, initialValue: null, seedExpression);
-        return this;
-    }
-
-    /// <summary>按属性名批量声明 base 成员。</summary>
-    public AttributeOwnerBuilder Require(IEnumerable<string> attributeNames)
-    {
-        ArgumentNullException.ThrowIfNull(attributeNames);
-        foreach (var attributeName in attributeNames)
-            Require(attributeName);
         return this;
     }
 
@@ -145,17 +145,15 @@ public sealed class AttributeOwnerBuilder
         Dictionary<string, AttributeSpec> specByAttributeName)
     {
         var compiled = new CompiledExpression(declarationText);
-        foreach (var dep in compiled.Dependencies)
-        {
-            if (!specByAttributeName.ContainsKey(dep))
-                throw new InvalidOperationException(
-                    $"属性 '{attributeName}' 声明的{kindLabel} '{compiled.ExpressionText}' " +
-                    $"引用了本次构建未包含的属性：'{dep}'。");
-        }
+        var missing = compiled.Dependencies.FirstOrDefault(dep => !specByAttributeName.ContainsKey(dep));
+        if (missing is not null)
+            throw new InvalidOperationException(
+                $"属性 '{attributeName}' 声明的{kindLabel} '{compiled.ExpressionText}' " +
+                $"引用了本次构建未包含的属性：'{missing}'。");
         return compiled;
     }
 
-    /// <summary>登记一次成员声明：新名入列。重复声明按形态判冲突——
+    /// <summary>登记一次成员声明：新名分流到登记，重复声明分流到合并判定。重复声明按形态判冲突——
     /// 纯 base 重复按初值并集语义处理（初值一致或仅一方声明初值时幂等/合并，两个不同初值冲突）；
     /// 相同 seed 的聚合栈重复声明幂等；plain 表达式、聚合栈 seed 与 base 之间的任何交叉混合、
     /// 不同 seed、重复表达式声明均记为冲突，Build 时统一报错。
@@ -163,42 +161,64 @@ public sealed class AttributeOwnerBuilder
     /// 否则初值会在冲突未被报告的情况下静默丢失。</summary>
     private void AddRequired(string attributeName, string? expression, AttributeValueType? initialValue, string? seed = null)
     {
-        if (!_requiredAttributeNameSet.Add(attributeName))
+        if (_requiredAttributeNameSet.Add(attributeName))
         {
-            if (expression is not null || seed is not null)
-            {
-                // 带声明文本的重复声明：仅"已登记聚合栈 + 相同 seed"幂等，其余形态组合全冲突
-                if (seed is null
-                    || !_seedExpressionsByAttributeName.TryGetValue(attributeName, out var registeredSeed)
-                    || !AttributeNames.Comparer.Equals(seed, registeredSeed))
-                    _conflictedNames.Add(attributeName);
-                return;
-            }
-
-            // 纯 base 重复声明：已登记 plain 或聚合栈 → 冲突；纯 base → 初值并集
-            if (_expressionsByAttributeName.ContainsKey(attributeName)
-                || _seedExpressionsByAttributeName.ContainsKey(attributeName))
-            {
-                _conflictedNames.Add(attributeName);
-                return;
-            }
-
-            if (initialValue.HasValue)
-            {
-                if (_initialValuesByAttributeName.TryGetValue(attributeName, out var existing)
-                    && !EqualityComparer<AttributeValueType>.Default.Equals(existing, initialValue.Value))
-                    _conflictedNames.Add(attributeName);
-                else
-                    _initialValuesByAttributeName[attributeName] = initialValue.Value;
-            }
+            RegisterNewDeclaration(attributeName, expression, initialValue, seed);
             return;
         }
+        MergeRepeatedDeclaration(attributeName, expression, initialValue, seed);
+    }
+
+    /// <summary>登记新名字的声明：名入列，按声明的形态分别登记表达式、seed 与初值。</summary>
+    private void RegisterNewDeclaration(string attributeName, string? expression, AttributeValueType? initialValue, string? seed)
+    {
         _requiredAttributeNames.Add(attributeName);
         if (expression is not null)
             _expressionsByAttributeName[attributeName] = expression;
         if (seed is not null)
             _seedExpressionsByAttributeName[attributeName] = seed;
         if (initialValue.HasValue)
+            _initialValuesByAttributeName[attributeName] = initialValue.Value;
+    }
+
+    /// <summary>重复声明的合并判定：带声明文本的（表达式或 seed）与纯 base 的分流处理。</summary>
+    private void MergeRepeatedDeclaration(string attributeName, string? expression, AttributeValueType? initialValue, string? seed)
+    {
+        if (expression is not null || seed is not null)
+        {
+            MergeRepeatedDeclarationWithText(attributeName, seed);
+            return;
+        }
+        MergeRepeatedBaseDeclaration(attributeName, initialValue);
+    }
+
+    /// <summary>带声明文本的重复声明：仅"已登记聚合栈 + 相同 seed"幂等，其余形态组合全冲突。</summary>
+    private void MergeRepeatedDeclarationWithText(string attributeName, string? seed)
+    {
+        if (seed is null
+            || !_seedExpressionsByAttributeName.TryGetValue(attributeName, out var registeredSeed)
+            || !AttributeNames.Comparer.Equals(seed, registeredSeed))
+            _conflictedNames.Add(attributeName);
+    }
+
+    /// <summary>纯 base 重复声明：已登记 plain 或聚合栈 → 冲突；纯 base → 初值并集
+    /// （初值一致或仅一方声明初值时幂等/合并，两个不同初值冲突）。</summary>
+    private void MergeRepeatedBaseDeclaration(string attributeName, AttributeValueType? initialValue)
+    {
+        if (_expressionsByAttributeName.ContainsKey(attributeName)
+            || _seedExpressionsByAttributeName.ContainsKey(attributeName))
+        {
+            _conflictedNames.Add(attributeName);
+            return;
+        }
+
+        if (!initialValue.HasValue)
+            return;
+
+        if (_initialValuesByAttributeName.TryGetValue(attributeName, out var existing)
+            && !EqualityComparer<AttributeValueType>.Default.Equals(existing, initialValue.Value))
+            _conflictedNames.Add(attributeName);
+        else
             _initialValuesByAttributeName[attributeName] = initialValue.Value;
     }
 }

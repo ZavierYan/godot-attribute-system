@@ -47,7 +47,7 @@ internal sealed class CompiledExpression
         foreach (var (name, value) in dependencyValues)
             _expression.Parameters[name] = value;
 
-        object raw;
+        object? raw;
         try
         {
             raw = _expression.Evaluate();
@@ -65,7 +65,7 @@ internal sealed class CompiledExpression
     /// 同族克隆实例共享此委托（见 AttributeOwner.Clone），并发求值会互相污染。</summary>
     public AttributeCalculator AsCalculator() => dependencyValues => Evaluate(dependencyValues);
 
-    private static IReadOnlyList<string> CollectIdentifiers(LogicalExpression ast)
+    private static List<string> CollectIdentifiers(LogicalExpression ast)
     {
         var visitor = new IdentifierCollector();
         ast.Accept(visitor);

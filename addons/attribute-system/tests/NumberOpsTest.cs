@@ -4,28 +4,28 @@ using static GdUnit4.Assertions;
 namespace AttributeSystem.Tests;
 
 [TestSuite]
-public class NumberOpsTest
+public class NumberOpsTest // NOSONAR S1118: gdUnit4 fixture 要求公共无参构造器，与静态类/保护构造器冲突
 {
     [TestCase]
-    public void ClampKeepsValueInsideRange()
+    public static void ClampKeepsValueInsideRange()
     {
         AssertThat(NumberOps<AttributeValueType>.Clamp((AttributeValueType)2, (AttributeValueType)0, (AttributeValueType)5)).IsEqual((AttributeValueType)2);
     }
 
     [TestCase]
-    public void ClampLimitsValueBelowMinimum()
+    public static void ClampLimitsValueBelowMinimum()
     {
         AssertThat(NumberOps<AttributeValueType>.Clamp(-(AttributeValueType)5, (AttributeValueType)0, (AttributeValueType)100)).IsEqual((AttributeValueType)0);
     }
 
     [TestCase]
-    public void ClampLimitsValueAboveMaximum()
+    public static void ClampLimitsValueAboveMaximum()
     {
         AssertThat(NumberOps<AttributeValueType>.Clamp((AttributeValueType)150, (AttributeValueType)0, (AttributeValueType)100)).IsEqual((AttributeValueType)100);
     }
 
     [TestCase]
-    public void TypeExtremesSpanTheValidRange()
+    public static void TypeExtremesSpanTheValidRange()
     {
         AssertBool(NumberOps<AttributeValueType>.TypeMin < NumberOps<AttributeValueType>.TypeMax).IsTrue();
 

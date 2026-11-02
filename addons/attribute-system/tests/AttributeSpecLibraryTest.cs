@@ -5,34 +5,34 @@ using static AttributeSystem.Tests.TestHelpers;
 namespace AttributeSystem.Tests;
 
 [TestSuite]
-public class AttributeSpecLibraryTest
+public class AttributeSpecLibraryTest // NOSONAR S1118: gdUnit4 fixture 要求公共无参构造器，与静态类/保护构造器冲突
 {
     [TestCase]
-    public void RegisterThenGetReturnsSameInstance()
+    public static void RegisterThenGetReturnsSameInstance()
     {
         var library = new AttributeSpecLibrary();
-        var spec = new AttributeSpec("attack", 0, 999);
+        var spec = new AttributeSpec(TestNames.Attack, 0, 999);
 
         library.Register(spec);
 
-        AssertBool(library.Contains("attack")).IsTrue();
-        AssertThat(library.Get("attack")).IsSame(spec);
+        AssertBool(library.Contains(TestNames.Attack)).IsTrue();
+        AssertThat(library.Get(TestNames.Attack)).IsSame(spec);
     }
 
     [TestCase]
-    public void RegisterDuplicateAttributeNameIsRejected()
+    public static void RegisterDuplicateAttributeNameIsRejected()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("attack", 0, 999));
+        library.Register(new AttributeSpec(TestNames.Attack, 0, 999));
 
-        var caught = Catch(() => library.Register(new AttributeSpec("attack", 0, 100)));
+        var caught = Catch(() => library.Register(new AttributeSpec(TestNames.Attack, 0, 100)));
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
-        AssertThat(caught!.Message).Contains("attack");
+        AssertThat(caught!.Message).Contains(TestNames.Attack);
     }
 
     [TestCase]
-    public void GetMissingAttributeNameThrowsWithName()
+    public static void GetMissingAttributeNameThrowsWithName()
     {
         var library = new AttributeSpecLibrary();
 
@@ -43,13 +43,13 @@ public class AttributeSpecLibraryTest
     }
 
     [TestCase]
-    public void TryGetAndContainsReflectRegistration()
+    public static void TryGetAndContainsReflectRegistration()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("attack"));
+        library.Register(new AttributeSpec(TestNames.Attack));
 
-        AssertBool(library.TryGet("attack", out var spec)).IsTrue();
-        AssertThat(spec!.AttributeName).IsEqual("attack");
+        AssertBool(library.TryGet(TestNames.Attack, out var spec)).IsTrue();
+        AssertThat(spec.AttributeName).IsEqual(TestNames.Attack);
         AssertBool(library.TryGet("mana", out _)).IsFalse();
         AssertBool(library.Contains("mana")).IsFalse();
     }

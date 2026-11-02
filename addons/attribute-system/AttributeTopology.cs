@@ -36,11 +36,8 @@ internal static class AttributeTopology
             }
             state[name] = 1;
             path.Add(name);
-            foreach (var dep in calculations[name].Dependencies)
-            {
-                if (calculations.ContainsKey(dep))
-                    Visit(dep);
-            }
+            foreach (var dep in calculations[name].Dependencies.Where(calculations.ContainsKey))
+                Visit(dep);
             path.RemoveAt(path.Count - 1);
             state[name] = 2;
             order.Add(name);

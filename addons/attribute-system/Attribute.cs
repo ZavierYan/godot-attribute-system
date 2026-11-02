@@ -72,7 +72,9 @@ public sealed class Attribute
             if (IsDerived)
                 throw new InvalidOperationException($"属性 '{Name}' 为 derived，不可直接写入；其值只能随依赖变化而改变。");
             var clamped = NumberOps<AttributeValueType>.Clamp(value, MinValue, MaxValue);
-            if (clamped == _value)
+            // 幂等写入判定必须精确比较两侧的已存储值（均为钳制后的确定值），引入容差会吞掉合法的
+            // 微增量更新、造成静默丢值——S1244 在此为误报
+            if (clamped == _value) // NOSONAR S1244
                 return;
             var oldValue = _value;
             _value = clamped;

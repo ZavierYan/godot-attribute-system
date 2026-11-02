@@ -104,7 +104,7 @@ prototypes.Register("mage", new AttributeOwnerBuilder(library)
 var hero = prototypes.Clone("warrior");
 prototypes.TryClone("rogue", out var rogue);      // 未登记：返回 false 而不抛异常
 
-foreach (var name in prototypes.PrototypeNames)   // 列出全部可选模板
+foreach (var name in prototypes.PrototypeNames())   // 列出全部可选模板
     GD.Print(name);
 ```
 

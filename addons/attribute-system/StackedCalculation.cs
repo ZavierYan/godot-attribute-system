@@ -119,15 +119,12 @@ internal sealed class StackedCalculation : IAttributeCalculation
         var merged = new List<string>();
         var seen = new HashSet<string>(AttributeNames.Comparer);
 
-        foreach (var name in _seed.Dependencies)
-            if (seen.Add(name))
-                merged.Add(name);
+        // Where(seen.Add)：HashSet.Add 兼任过滤器与去重副作用，有序保留首次出现的依赖名
+        merged.AddRange(_seed.Dependencies.Where(seen.Add));
 
         foreach (var bucket in Buckets())
             foreach (var contribution in bucket)
-                foreach (var name in contribution.Expression.Dependencies)
-                    if (seen.Add(name))
-                        merged.Add(name);
+                merged.AddRange(contribution.Expression.Dependencies.Where(seen.Add));
 
         _dependencies = merged;
     }

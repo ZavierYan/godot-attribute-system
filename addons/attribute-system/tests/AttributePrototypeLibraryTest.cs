@@ -5,49 +5,49 @@ using static AttributeSystem.Tests.TestHelpers;
 namespace AttributeSystem.Tests;
 
 [TestSuite]
-public class AttributePrototypeLibraryTest
+public class AttributePrototypeLibraryTest // NOSONAR S1118: gdUnit4 fixture 要求公共无参构造器，与静态类/保护构造器冲突
 {
     private static AttributeSpecLibrary CreateSpecLibrary()
     {
         var library = new AttributeSpecLibrary();
-        library.Register(new AttributeSpec("strength", 0, 100));
+        library.Register(new AttributeSpec(TestNames.Strength, 0, 100));
         library.Register(new AttributeSpec("attack", 0, 999));
         return library;
     }
 
     private static AttributeOwnerBuilder CreateWarriorBuilder(AttributeSpecLibrary specLibrary)
         => new AttributeOwnerBuilder(specLibrary)
-            .Require("strength", (AttributeValueType)15)
+            .Require(TestNames.Strength, (AttributeValueType)15)
             .Require("attack", "strength * 2");
 
     [TestCase]
-    public void RegisterThenCloneCarriesInitialValues()
+    public static void RegisterThenCloneCarriesInitialValues()
     {
         var library = new AttributePrototypeLibrary();
-        library.Register("warrior", CreateWarriorBuilder(CreateSpecLibrary()));
+        library.Register(TestNames.Warrior, CreateWarriorBuilder(CreateSpecLibrary()));
 
-        var warrior = library.Clone("warrior");
+        var warrior = library.Clone(TestNames.Warrior);
 
-        AssertThat(warrior.GetValue("strength")).IsEqual((AttributeValueType)15);
+        AssertThat(warrior.GetValue(TestNames.Strength)).IsEqual((AttributeValueType)15);
         AssertThat(warrior.GetValue("attack")).IsEqual((AttributeValueType)30);
     }
 
     [TestCase]
-    public void RegisterDuplicatePrototypeNameIsRejected()
+    public static void RegisterDuplicatePrototypeNameIsRejected()
     {
         var specLibrary = CreateSpecLibrary();
         var library = new AttributePrototypeLibrary();
-        library.Register("warrior", CreateWarriorBuilder(specLibrary));
+        library.Register(TestNames.Warrior, CreateWarriorBuilder(specLibrary));
 
         var caught = Catch(() => library.Register(
-            "warrior", new AttributeOwnerBuilder(specLibrary).Require("strength")));
+            TestNames.Warrior, new AttributeOwnerBuilder(specLibrary).Require(TestNames.Strength)));
 
         AssertThat(caught).IsInstanceOf<InvalidOperationException>();
-        AssertThat(caught!.Message).Contains("warrior");
+        AssertThat(caught!.Message).Contains(TestNames.Warrior);
     }
 
     [TestCase]
-    public void RegisterBlankPrototypeNameThrowsImmediately()
+    public static void RegisterBlankPrototypeNameThrowsImmediately()
     {
         var library = new AttributePrototypeLibrary();
         var builder = CreateWarriorBuilder(CreateSpecLibrary());
@@ -60,41 +60,41 @@ public class AttributePrototypeLibraryTest
     }
 
     [TestCase]
-    public void RegisterNullBuilderThrows()
+    public static void RegisterNullBuilderThrows()
     {
         var library = new AttributePrototypeLibrary();
 
-        var caught = Catch(() => library.Register("warrior", null!));
+        var caught = Catch(() => library.Register(TestNames.Warrior, null!));
 
         AssertThat(caught).IsInstanceOf<ArgumentNullException>();
     }
 
     [TestCase]
-    public void CloneUnregisteredPrototypeNameThrowsWithName()
+    public static void CloneUnregisteredPrototypeNameThrowsWithName()
     {
         var library = new AttributePrototypeLibrary();
 
-        var caught = Catch(() => library.Clone("rogue"));
+        var caught = Catch(() => library.Clone(TestNames.Rogue));
 
         AssertThat(caught).IsInstanceOf<KeyNotFoundException>();
-        AssertThat(caught!.Message).Contains("rogue");
+        AssertThat(caught!.Message).Contains(TestNames.Rogue);
     }
 
     [TestCase]
-    public void TryCloneAndContainsReflectRegistration()
+    public static void TryCloneAndContainsReflectRegistration()
     {
         var library = new AttributePrototypeLibrary();
-        library.Register("warrior", CreateWarriorBuilder(CreateSpecLibrary()));
+        library.Register(TestNames.Warrior, CreateWarriorBuilder(CreateSpecLibrary()));
 
-        AssertBool(library.TryClone("warrior", out var warrior)).IsTrue();
-        AssertThat(warrior!.GetValue("strength")).IsEqual((AttributeValueType)15);
-        AssertBool(library.Contains("warrior")).IsTrue();
-        AssertBool(library.TryClone("rogue", out _)).IsFalse();
-        AssertBool(library.Contains("rogue")).IsFalse();
+        AssertBool(library.TryClone(TestNames.Warrior, out var warrior)).IsTrue();
+        AssertThat(warrior.GetValue(TestNames.Strength)).IsEqual((AttributeValueType)15);
+        AssertBool(library.Contains(TestNames.Warrior)).IsTrue();
+        AssertBool(library.TryClone(TestNames.Rogue, out _)).IsFalse();
+        AssertBool(library.Contains(TestNames.Rogue)).IsFalse();
     }
 
     [TestCase]
-    public void BuildErrorsSurfaceAtRegistration()
+    public static void BuildErrorsSurfaceAtRegistration()
     {
         var library = new AttributePrototypeLibrary();
 
@@ -107,17 +107,17 @@ public class AttributePrototypeLibraryTest
     }
 
     [TestCase]
-    public void PrototypeNamesEnumeratesRegisteredPrototypes()
+    public static void PrototypeNamesEnumeratesRegisteredPrototypes()
     {
         var specLibrary = CreateSpecLibrary();
         var library = new AttributePrototypeLibrary();
-        library.Register("warrior", CreateWarriorBuilder(specLibrary));
-        library.Register("mage", new AttributeOwnerBuilder(specLibrary).Require("strength"));
+        library.Register(TestNames.Warrior, CreateWarriorBuilder(specLibrary));
+        library.Register("mage", new AttributeOwnerBuilder(specLibrary).Require(TestNames.Strength));
 
-        var names = library.PrototypeNames;
+        var names = library.PrototypeNames();
 
         AssertThat(names.Count).IsEqual(2);
-        AssertBool(names.Contains("warrior")).IsTrue();
+        AssertBool(names.Contains(TestNames.Warrior)).IsTrue();
         AssertBool(names.Contains("mage")).IsTrue();
     }
 }

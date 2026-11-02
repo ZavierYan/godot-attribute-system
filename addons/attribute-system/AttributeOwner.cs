@@ -139,11 +139,13 @@ public sealed class AttributeOwner
         EnsureMutableTables();
 
         var attributeName = spec.AttributeName;
-        var attribute = calculation is null
-            ? initialValue.HasValue
+        Attribute attribute;
+        if (calculation is null)
+            attribute = initialValue.HasValue
                 ? Attribute.CreateBase(spec, initialValue.Value)
-                : Attribute.CreateBase(spec)
-            : Attribute.CreateDerived(spec);
+                : Attribute.CreateBase(spec);
+        else
+            attribute = Attribute.CreateDerived(spec);
         attribute.Owner = this;
         _attributes.Add(attributeName, attribute);
 
@@ -172,13 +174,11 @@ public sealed class AttributeOwner
     /// 否则抛出（错误信息同时含表达式文本与未解析名）。action 描述变异动作，用于错误信息措辞。</summary>
     private void ValidateDependencies(string attributeName, CompiledExpression compiled, string action = "添加属性")
     {
-        foreach (var dep in compiled.Dependencies)
-        {
-            if (!_attributes.ContainsKey(dep))
-                throw new InvalidOperationException(
-                    $"{action} '{attributeName}' 的表达式 '{compiled.ExpressionText}' " +
-                    $"引用了不存在的属性：'{dep}'。");
-        }
+        var missing = compiled.Dependencies.FirstOrDefault(dep => !_attributes.ContainsKey(dep));
+        if (missing is not null)
+            throw new InvalidOperationException(
+                $"{action} '{attributeName}' 的表达式 '{compiled.ExpressionText}' " +
+                $"引用了不存在的属性：'{missing}'。");
     }
 
     /// <summary>首次变异前私有化三张静态表（design D7）：深拷贝 _directDependents（字典 + 内层 List）
@@ -289,7 +289,7 @@ public sealed class AttributeOwner
     public void RemoveAttribute(string attributeName)
     {
         Guard.NotBlank(attributeName, nameof(attributeName));
-        if (!_attributes.TryGetValue(attributeName, out var attribute))
+        if (!_attributes.ContainsKey(attributeName))
             throw new KeyNotFoundException($"AttributeOwner 中不存在名为 '{attributeName}' 的属性。");
 
         foreach (var (name, calculation) in _calculations)
@@ -356,11 +356,8 @@ public sealed class AttributeOwner
             state[name] = 2;
         }
 
-        foreach (var dependencyName in contributionDependencies)
-        {
-            if (_calculations.ContainsKey(dependencyName))
-                Visit(dependencyName);
-        }
+        foreach (var dependencyName in contributionDependencies.Where(_calculations.ContainsKey))
+            Visit(dependencyName);
     }
 
     /// <summary>按 target 变异前后的依赖并集差分维护直接依赖边（并集语义：同一依赖名可能同时被

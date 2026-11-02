@@ -5,12 +5,12 @@ using static AttributeSystem.Tests.TestHelpers;
 namespace AttributeSystem.Tests;
 
 [TestSuite]
-public class AttributeSpecTest
+public class AttributeSpecTest // NOSONAR S1118: gdUnit4 fixture 要求公共无参构造器，与静态类/保护构造器冲突
 {
     // ---- 合法 spec ----
 
     [TestCase]
-    public void SpecWithNameAndBoundsIsValid()
+    public static void SpecWithNameAndBoundsIsValid()
     {
         var spec = new AttributeSpec("strength", 0, 999);
 
@@ -20,7 +20,7 @@ public class AttributeSpecTest
     }
 
     [TestCase]
-    public void MinMaxDefaultToTypeExtremesWhenOmitted()
+    public static void MinMaxDefaultToTypeExtremesWhenOmitted()
     {
         var spec = new AttributeSpec("power");
 
@@ -31,18 +31,18 @@ public class AttributeSpecTest
     // ---- 非法 spec 被拒绝 ----
 
     [TestCase]
-    public void BlankAttributeNameIsRejected()
+    public static void BlankAttributeNameIsRejected()
     {
-        var caught = Catch(() => new AttributeSpec(" "));
+        var caught = Catch(() => _ = new AttributeSpec(" "));
 
         AssertThat(caught).IsInstanceOf<ArgumentException>();
         AssertThat(caught!.Message).Contains("attributeName");
     }
 
     [TestCase]
-    public void MinValueGreaterThanMaxValueIsRejected()
+    public static void MinValueGreaterThanMaxValueIsRejected()
     {
-        var caught = Catch(() => new AttributeSpec("attr", 100, 0));
+        var caught = Catch(() => _ = new AttributeSpec("attr", 100, 0));
 
         AssertThat(caught).IsInstanceOf<ArgumentException>();
         AssertThat(caught!.Message).Contains("MaxValue");
