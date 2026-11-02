@@ -1,53 +1,6 @@
 namespace AttributeSystem;
 
 /// <summary>
-/// 属性值变更事件参数。
-/// <para>base 变更事件：OldValue 为旧值，NewValue 直接可得。</para>
-/// <para>derived 失效事件：OldValue 为失效前的缓存快照——失效通知仅在缓存由有效转为失效时发出，
-/// 故该值正常恒非空，null 仅作为防御性取值保留；NewValue 以惰性方式暴露——仅当订阅方访问时才触发重算，未访问不产生求值。</para>
-/// </summary>
-public sealed class AttributeChangedEventArgs : EventArgs
-{
-    private readonly Func<AttributeValueType>? _newValueProvider;
-    private AttributeValueType? _newValue;
-
-    /// <summary>发生变化的属性名（AttributeName）。</summary>
-    public string Name { get; }
-
-    /// <summary>旧值；derived 失效事件中为失效前的缓存快照，正常恒非空（null 仅为防御性取值）。</summary>
-    public AttributeValueType? OldValue { get; }
-
-    /// <summary>新值。derived 失效事件中首次访问时触发重算（重算结果同时写入缓存，多次访问至多重算一次）。</summary>
-    public AttributeValueType NewValue
-    {
-        get
-        {
-            if (_newValue.HasValue)
-                return _newValue.Value;
-            if (_newValueProvider is null)
-                throw new InvalidOperationException("该事件未携带新值。");
-            var value = _newValueProvider();
-            _newValue = value;
-            return value;
-        }
-    }
-
-    internal AttributeChangedEventArgs(string name, AttributeValueType? oldValue, AttributeValueType newValue)
-    {
-        Name = name;
-        OldValue = oldValue;
-        _newValue = newValue;
-    }
-
-    internal AttributeChangedEventArgs(string name, AttributeValueType? oldValue, Func<AttributeValueType> newValueProvider)
-    {
-        Name = name;
-        OldValue = oldValue;
-        _newValueProvider = newValueProvider;
-    }
-}
-
-/// <summary>
 /// 运行时属性。base 属性的值可直接读写（写入时钳制到 [MinValue, MaxValue]）；
 /// derived 属性的值只读，缓存-懒加载：失效后首次读取时经统一求值委托重算并缓存。
 /// 最值等定义数据不复制，经由持有的出生 spec 引用提供（单一真相源）。
@@ -78,8 +31,10 @@ public sealed class Attribute
     /// <summary>上限，经由出生 spec 提供。</summary>
     public AttributeValueType MaxValue => _spec.MaxValue;
 
-    /// <summary>值变化/失效事件。分发按订阅快照进行：处理器内的订阅/退订不影响当次分发。</summary>
-    public event EventHandler<AttributeChangedEventArgs>? ValueChanged;
+    /// <summary>值变化/失效事件，携带发生变化的属性与旧值；新值经由该属性读取获得
+    /// （derived 惰性求值——读取时才触发重算，未读取不产生求值）。
+    /// 分发按订阅快照进行：处理器内的订阅/退订不影响当次分发。</summary>
+    public event Action<Attribute, AttributeValueType?>? ValueChanged;
 
     private Attribute(AttributeSpec spec, bool isDerived, AttributeValueType initialValue)
     {
@@ -121,7 +76,7 @@ public sealed class Attribute
                 return;
             var oldValue = _value;
             _value = clamped;
-            ValueChanged?.Invoke(this, new AttributeChangedEventArgs(Name, oldValue, clamped));
+            ValueChanged?.Invoke(this, oldValue);
             Owner?.InvalidateDependents(this);
         }
     }
@@ -154,9 +109,9 @@ public sealed class Attribute
         return snapshot;
     }
 
-    /// <summary>发出失效事件。NewValue 惰性：订阅方访问时才经 ComputeValue 重算。</summary>
+    /// <summary>发出失效事件，携带失效前的缓存快照作为旧值；新值由订阅方读取该属性时惰性重算。</summary>
     internal void RaiseInvalidated(AttributeValueType? oldSnapshot)
     {
-        ValueChanged?.Invoke(this, new AttributeChangedEventArgs(Name, oldSnapshot, ComputeValue));
+        ValueChanged?.Invoke(this, oldSnapshot);
     }
 }

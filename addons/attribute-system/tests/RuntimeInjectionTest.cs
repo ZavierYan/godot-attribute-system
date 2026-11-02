@@ -133,16 +133,22 @@ public class RuntimeInjectionTest
         owner.SetValue("attackbase", (AttributeValueType)10);
         AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)10); // 建立缓存
 
-        AttributeChangedEventArgs? received = null;
-        owner.Get("attack").ValueChanged += (_, args) => received = args;
+        Attribute? received = null;
+        AttributeValueType? receivedOldValue = null;
+        owner.Get("attack").ValueChanged += (attribute, oldValue) =>
+        {
+            received = attribute;
+            receivedOldValue = oldValue;
+        };
 
         owner.Contribute("attack", ContributionKind.Flat, "5");
 
         AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)15);
         AssertThat(received).IsNotNull();
         AssertThat(received!.Name).IsEqual("attack");
-        AssertThat(received.OldValue).IsEqual((AttributeValueType)10);
-        AssertThat(received.NewValue).IsEqual((AttributeValueType)15);
+        AssertBool(receivedOldValue.HasValue).IsTrue();
+        AssertThat(receivedOldValue!.Value).IsEqual((AttributeValueType)10);
+        AssertThat(received.Value).IsEqual((AttributeValueType)15);
     }
 
     [TestCase]
@@ -153,11 +159,13 @@ public class RuntimeInjectionTest
         owner.SetValue("strength", (AttributeValueType)10); // attack 从未读取：出生即脏
 
         var eventCount = 0;
-        AttributeChangedEventArgs? received = null;
-        owner.Get("attack").ValueChanged += (_, args) =>
+        Attribute? received = null;
+        AttributeValueType? receivedOldValue = null;
+        owner.Get("attack").ValueChanged += (attribute, oldValue) =>
         {
             eventCount++;
-            received = args;
+            received = attribute;
+            receivedOldValue = oldValue;
         };
 
         // 场景「合并语义（贡献路径）」：目标已脏，贡献并入同一次待重算，整波剪枝无通知
@@ -172,8 +180,9 @@ public class RuntimeInjectionTest
         AssertThat(eventCount).IsEqual(1);
         AssertThat(received).IsNotNull();
         AssertThat(received!.Name).IsEqual("attack");
-        AssertThat(received.OldValue).IsEqual((AttributeValueType)15);
-        AssertThat(received.NewValue).IsEqual((AttributeValueType)18);
+        AssertBool(receivedOldValue.HasValue).IsTrue();
+        AssertThat(receivedOldValue!.Value).IsEqual((AttributeValueType)15);
+        AssertThat(received.Value).IsEqual((AttributeValueType)18);
     }
 
     [TestCase]

@@ -30,24 +30,24 @@ public class ObservationTest
     // ---- base 变更事件 ----
 
     [TestCase]
-    public void BaseChangeEventCarriesNameOldAndNewValue()
+    public void BaseChangeEventCarriesAttributeAndOldValue()
     {
         var owner = CreateChainOwner();
         owner.SetValue("strength", (AttributeValueType)10);
 
-        string? name = null;
+        Attribute? changed = null;
         AttributeValueType? oldValue = null;
         AttributeValueType? newValue = null;
-        owner.Get("strength").ValueChanged += (_, e) =>
+        owner.Get("strength").ValueChanged += (attribute, old) =>
         {
-            name = e.Name;
-            oldValue = e.OldValue;
-            newValue = e.NewValue;
+            changed = attribute;
+            oldValue = old;
+            newValue = attribute.Value;
         };
 
         owner.SetValue("strength", (AttributeValueType)20);
 
-        AssertThat(name).IsEqual("strength");
+        AssertThat(changed!.Name).IsEqual("strength");
         AssertBool(oldValue.HasValue).IsTrue();
         AssertThat(oldValue!.Value).IsEqual((AttributeValueType)10);
         AssertBool(newValue.HasValue).IsTrue();
@@ -75,7 +75,7 @@ public class ObservationTest
         owner.SetValue("strength", (AttributeValueType)10);
 
         var eventCount = 0;
-        EventHandler<AttributeChangedEventArgs> handler = (_, _) => eventCount++;
+        Action<Attribute, AttributeValueType?> handler = (_, _) => eventCount++;
         owner.Get("strength").ValueChanged += handler;
         owner.SetValue("strength", (AttributeValueType)20);
         AssertThat(eventCount).IsEqual(1);
@@ -122,11 +122,11 @@ public class ObservationTest
 
         int evaluationsDuringEvent = -1;
         AttributeValueType newValue = default;
-        owner.Get("attack").ValueChanged += (_, e) =>
+        owner.Get("attack").ValueChanged += (attack, _) =>
         {
-            // 通知发出时未访问 NewValue：不产生重算
+            // 通知发出时未读取属性：不产生重算
             evaluationsDuringEvent = evaluations;
-            newValue = e.NewValue;
+            newValue = attack.Value;
         };
 
         owner.SetValue("strength", (AttributeValueType)15);
@@ -144,10 +144,10 @@ public class ObservationTest
 
         var eventCount = 0;
         AttributeValueType? oldValue = null;
-        owner.Get("attack").ValueChanged += (_, e) =>
+        owner.Get("attack").ValueChanged += (_, old) =>
         {
             eventCount++;
-            oldValue = e.OldValue;
+            oldValue = old;
         };
 
         // 场景「从未读取过的 derived 首次读取前不通知」：attack 出生即脏、从未读取，
@@ -174,7 +174,7 @@ public class ObservationTest
         AssertThat(owner.GetValue("attack")).IsEqual((AttributeValueType)20);
 
         AttributeValueType? oldValue = null;
-        owner.Get("attack").ValueChanged += (_, e) => oldValue = e.OldValue;
+        owner.Get("attack").ValueChanged += (_, old) => oldValue = old;
 
         owner.SetValue("strength", (AttributeValueType)15);
 
@@ -218,8 +218,8 @@ public class ObservationTest
         AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)25);
 
         var order = new List<string>();
-        owner.Get("attack").ValueChanged += (_, e) => order.Add(e.Name);
-        owner.Get("total").ValueChanged += (_, e) => order.Add(e.Name);
+        owner.Get("attack").ValueChanged += (attribute, _) => order.Add(attribute.Name);
+        owner.Get("total").ValueChanged += (attribute, _) => order.Add(attribute.Name);
 
         owner.SetValue("strength", (AttributeValueType)15);
 
@@ -234,9 +234,9 @@ public class ObservationTest
         AssertThat(owner.GetValue("total")).IsEqual((AttributeValueType)25);
 
         var order = new List<string>();
-        owner.Get("strength").ValueChanged += (_, e) => order.Add(e.Name);
-        owner.Get("attack").ValueChanged += (_, e) => order.Add(e.Name);
-        owner.Get("total").ValueChanged += (_, e) => order.Add(e.Name);
+        owner.Get("strength").ValueChanged += (attribute, _) => order.Add(attribute.Name);
+        owner.Get("attack").ValueChanged += (attribute, _) => order.Add(attribute.Name);
+        owner.Get("total").ValueChanged += (attribute, _) => order.Add(attribute.Name);
 
         owner.SetValue("strength", (AttributeValueType)15);
 
@@ -272,11 +272,11 @@ public class ObservationTest
 
         var aCount = 0;
         var bCount = 0;
-        EventHandler<AttributeChangedEventArgs> handlerA = (_, _) => aCount++;
-        EventHandler<AttributeChangedEventArgs> handlerB = (_, e) =>
+        Action<Attribute, AttributeValueType?> handlerA = (_, _) => aCount++;
+        Action<Attribute, AttributeValueType?> handlerB = (attribute, _) =>
         {
             bCount++;
-            owner.Get(e.Name).ValueChanged -= handlerA; // 处理器内退订 A
+            attribute.ValueChanged -= handlerA; // 处理器内退订 A
         };
         owner.Get("strength").ValueChanged += handlerA;
         owner.Get("strength").ValueChanged += handlerB;
@@ -299,9 +299,9 @@ public class ObservationTest
         owner.SetValue("strength", (AttributeValueType)10);
 
         var cCount = 0;
-        EventHandler<AttributeChangedEventArgs> handlerC = (_, _) => cCount++;
-        owner.Get("strength").ValueChanged += (_, e) =>
-            owner.Get(e.Name).ValueChanged += handlerC; // 处理器内订阅 C
+        Action<Attribute, AttributeValueType?> handlerC = (_, _) => cCount++;
+        owner.Get("strength").ValueChanged += (attribute, _) =>
+            attribute.ValueChanged += handlerC; // 处理器内订阅 C
 
         owner.SetValue("strength", (AttributeValueType)20);
         AssertThat(cCount).IsEqual(0);

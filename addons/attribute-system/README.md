@@ -133,15 +133,15 @@ attack = warrior.GetValue("attack");       // 15 + 3 = 18
 ## 第 5 步：订阅变化
 
 ```csharp
-// base：值变化时收到旧值与新值；写入相同的值不触发
-warrior.Get("strength").ValueChanged += (_, e) =>
-    GD.Print($"{e.Name}: {e.OldValue} -> {e.NewValue}");
+// base：值变化时收到事件（发生变化的属性 + 旧值）；写入相同的值不触发
+warrior.Get("strength").ValueChanged += (attribute, oldValue) =>
+    GD.Print($"{attribute.Name}: {oldValue} -> {attribute.Value}");
 
-// derived：依赖变化时收到"失效"通知。
+// derived：依赖变化时收到"失效"通知，事件同样携带属性与旧值。
 // 已失效（尚未重算）期间不重复通知，读取重算后再次变更会重新通知
-// e.NewValue 是惰性的——处理器里访问它才触发重算，不访问不求值
-warrior.Get("attack").ValueChanged += (_, e) =>
-    GD.Print($"attack 已失效，新值是 {e.NewValue}");
+// 新值经读取获得：读取该属性时才触发重算（惰性），不读取不求值
+warrior.Get("attack").ValueChanged += (attribute, oldValue) =>
+    GD.Print($"attack 已失效，旧值是 {oldValue}，新值是 {attribute.Value}");
 ```
 
 说明：

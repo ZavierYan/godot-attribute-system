@@ -217,11 +217,11 @@ base 属性的值 SHALL 可直接设置与读取；设置时值 MUST 被钳制�
 - **THEN** 添加调用抛出异常，错误信息包含该表达式内容
 
 ### Requirement: 运行时贡献与撤销
-聚合栈 derived SHALL 接受运行时类型化贡献：贡献操作指定目标属性名、贡献类型（flat / additive / multiplicative）与贡献表达式，返回可用于撤销的贡献句柄。贡献表达式 SHALL 为完整表达式，其引用的每个属性名 MUST 已存在于 owner，未解析引用与语法错误 MUST 在贡献调用时抛出。目标属性不存在、或存在但不是聚合栈 derived（base 或 plain derived）MUST 在贡献调用时抛出。贡献生效后目标及其下游沿既有依赖图失效，复用既有失效传播与事件（含惰性新值）。贡献表达式引用的属性（直接或间接）依赖目标属性自身时构成循环，MUST 在贡献调用时抛出循环依赖异常。撤销贡献 SHALL 按句柄进行，撤销后目标失效并按剩余贡献重算；重复撤销同一句柄、以其它 owner 的句柄撤销 MUST 抛出。
+聚合栈 derived SHALL 接受运行时类型化贡献：贡献操作指定目标属性名、贡献类型（flat / additive / multiplicative）与贡献表达式，返回可用于撤销的贡献句柄。贡献表达式 SHALL 为完整表达式，其引用的每个属性名 MUST 已存在于 owner，未解析引用与语法错误 MUST 在贡献调用时抛出。目标属性不存在、或存在但不是聚合栈 derived（base 或 plain derived）MUST 在贡献调用时抛出。贡献生效后目标及其下游沿既有依赖图失效，复用既有失效传播与事件（新值经读取该属性惰性求值）。贡献表达式引用的属性（直接或间接）依赖目标属性自身时构成循环，MUST 在贡献调用时抛出循环依赖异常。撤销贡献 SHALL 按句柄进行，撤销后目标失效并按剩余贡献重算；重复撤销同一句柄、以其它 owner 的句柄撤销 MUST 抛出。
 
 #### Scenario: 投入贡献后失效重算
 - **WHEN** 聚合栈 `attack`（seed `attackbase` 值 10）已被读取为 10，投入 flat 贡献 `effectattackbase`（值 5）后再次读取
-- **THEN** 得到 15；投入使 `attack` 失效并发出失效事件（事件的新值为惰性求值）
+- **THEN** 得到 15；投入使 `attack` 失效并发出失效事件（新值经读取该属性惰性求值）
 
 #### Scenario: 贡献依赖的属性变化时失效
 - **WHEN** flat 贡献 `effectattackbase` 在位，`effectattackbase` 被写为 7

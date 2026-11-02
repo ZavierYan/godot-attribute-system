@@ -220,7 +220,7 @@ public sealed class AttributeOwner
     /// 错误在变异调用时暴露——目标不存在、目标不是聚合栈 derived、表达式空白/语法错误/
     /// 未知引用、贡献成环均即时抛出且 owner 状态不变（守卫全部先于任何状态变更）。
     /// 成功后失效 target 自身及其下游（复用既有两阶段流程：标脏快照 → 按拓扑序分发，
-    /// NewValue 惰性，事件不新增种类），返回撤销专用句柄（一次性，绑定本 owner 与目标名）。</summary>
+    /// 新值经读取该属性惰性求值，事件不新增种类），返回撤销专用句柄（一次性，绑定本 owner 与目标名）。</summary>
     public ContributionHandle Contribute(string targetName, ContributionKind kind, string expression)
     {
         Guard.NotBlank(targetName, nameof(targetName));
