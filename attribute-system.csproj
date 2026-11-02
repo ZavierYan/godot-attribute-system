@@ -1,4 +1,7 @@
 <Project Sdk="Godot.NET.Sdk/4.6.3">
+
+  <!-- Godot 主工程（壳）：本仓库无游戏代码，仅作为宿主样例引用插件工程并承载 Godot 工程配置；
+       插件本体在 addons/attribute-system/AttributeSystem.csproj，测试在 tests/AttributeSystem.Tests.csproj。 -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
@@ -8,9 +11,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <PackageReference Include="NCalc" Version="7.1.0" />
-    <PackageReference Include="gdUnit4.api" Version="5.1.0-rc5" />
-    <PackageReference Include="gdUnit4.test.adapter" Version="3.1.1" />
+    <ProjectReference Include="addons/attribute-system/AttributeSystem.csproj" />
   </ItemGroup>
+  <!-- 主程序集不含任何手写源码：插件源码归插件工程、测试源码归测试工程 -->
+  <ItemGroup>
+    <Compile Remove="addons/**/*.cs" />
+    <Compile Remove="tests/**/*.cs" />
+  </ItemGroup>
+
 </Project>

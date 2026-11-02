@@ -5,3 +5,5 @@ addons/**/*.uid
 LOCAL.md
 .sonarqube/
 TestResults/
+bin/
+obj/

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 测试工程：gdUnit4 纯逻辑测试（零 Godot API 依赖，不随插件目录分发）。
+       gdUnit4.api 5.x 对纯逻辑测试默认进程内运行；未来如需 [RequireGodotRuntime] 测试，
+       需按官方 multi-project 布局改造（Godot.NET.Sdk + 自带 project.godot，gdUnit4.api ≥ 5.1.0-rc7）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="gdUnit4.api" Version="5.1.0-rc5" />
+    <PackageReference Include="gdUnit4.test.adapter" Version="3.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\addons\attribute-system\AttributeSystem.csproj" />
+  </ItemGroup>
+
+</Project>

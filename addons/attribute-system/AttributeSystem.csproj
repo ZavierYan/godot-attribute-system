@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 插件独立工程：纯 C# 逻辑库（零 Godot API 依赖），随目录源码分发；
+       宿主项目通过 ProjectReference 引用本工程，NCalc 依赖随引用传递。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- 宿主项目导出 Android 时要求 net9.0，与根 Godot 工程的条件保持一致 -->
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NCalc" Version="7.1.0" />
+  </ItemGroup>
+
+  <!-- 测试工程位于仓库根 tests/（不随插件目录分发），经此可见插件 internal 成员 -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AttributeSystem.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

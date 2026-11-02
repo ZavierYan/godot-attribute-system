@@ -5,7 +5,11 @@ Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅
 ## 安装
 
 1. 把 `addons/attribute-system/` 目录复制到你的 Godot 4 C# 项目中（插件为纯 C# 代码，命名空间 `AttributeSystem`，不依赖场景树）。
-2. 宿主项目 csproj 需引用表达式解析包 `NCalc`（可照抄本仓库 `attribute-system.csproj` 中的 `PackageReference`）。
+2. 宿主项目 csproj 以 ProjectReference 引用随目录分发的 `AttributeSystem.csproj`，表达式解析包 `NCalc` 随引用自动传递，无需手动添加：
+
+   ```xml
+   <ProjectReference Include="addons/attribute-system/AttributeSystem.csproj" />
+   ```
 
 ## 第 1 步：配置值类型（可选）
 
@@ -240,6 +244,7 @@ total = attack + 5                  可以引用其它 derived 属性
 ## 注意事项
 
 - 所有 API 仅主线程使用（内部无锁）。
+- 插件程序集保持零 Godot API 依赖：Godot 官方引擎不从引用程序集中发现 C# 脚本类，如需 `Node`/`Resource` 派生类型请放在宿主项目中实现。
 - spec 的 min/max 是硬性安全护栏（防负数、防溢出），写入与派生结果都会被钳制；"血量上限"这类会变化的游戏上限请建模为独立 attribute，再通过表达式参与计算（如 `Clamp(health, 0, maxHealth)`）。
 - derived 的值永远等于"用依赖当前值重算"的结果，把它当只读视图即可。
 
@@ -261,13 +266,17 @@ total = attack + 5                  可以引用其它 derived 属性
 | AttributeTopology.cs | 计算表拓扑序构建（构建期与运行期共用） |
 | AttributePrototypeLibrary.cs | 原型模板库：按名登记、按名克隆 |
 | Guard.cs / NumberOps.cs | 参数校验 / 泛型数学数值工具 |
-| tests/ | GdUnit4 纯逻辑测试 |
+| AttributeSystem.csproj | 插件工程文件（`NCalc` 依赖随 ProjectReference 传递） |
+
+测试位于本仓库根 `tests/`（独立测试工程，不随插件目录分发）：GdUnit4 纯逻辑测试，见「运行测试」。
 
 ## 运行测试
 
+测试不在插件目录内，位于本仓库根 `tests/`（独立测试工程）：
+
 ```bash
-dotnet test
+dotnet test attribute-system.sln
 ```
 
-测试为纯逻辑测试（无需启动 Godot）；Godot 编辑器内的测试面板由 `addons/gdUnit4/` 提供，已随仓库启用。
+测试为纯逻辑测试：gdUnit4 进程内运行，无需启动 Godot，无需设置 `GODOT_BIN`。
 
