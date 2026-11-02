@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- Godot.NET.Sdk 4.7.2 通配编译源码时未排除其它工程目录下的 bin/obj（4.6.3 会排除），
+       且在本 csproj 内追加 DefaultItemExcludes 对其通配目标不生效。
+       本文件在所有 SDK target 导入之后执行，通配结束后统一移除生成物，
+       防止它们被重复编译进程序集（CS0579 程序集特性重复）。 -->
+  <ItemGroup>
+    <Compile Remove="**/bin/**/*.cs" />
+    <Compile Remove="**/obj/**/*.cs" />
+  </ItemGroup>
+
+</Project>

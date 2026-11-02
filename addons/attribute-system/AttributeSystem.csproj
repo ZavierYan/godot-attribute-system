@@ -14,10 +14,10 @@
     <PackageReference Include="NCalc" Version="7.1.0" />
   </ItemGroup>
 
-  <!-- 测试工程位于仓库根 tests/（不随插件目录分发），经此可见插件 internal 成员 -->
+  <!-- 测试源码编译进 Godot 主程序集 attribute-system.dll（不随插件目录分发），经此可见插件 internal 成员 -->
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>AttributeSystem.Tests</_Parameter1>
+      <_Parameter1>attribute-system</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

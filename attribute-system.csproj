@@ -1,7 +1,8 @@
-<Project Sdk="Godot.NET.Sdk/4.6.3">
+<Project Sdk="Godot.NET.Sdk/4.7.2">
 
-  <!-- Godot 主工程（壳）：本仓库无游戏代码，仅作为宿主样例引用插件工程并承载 Godot 工程配置；
-       插件本体在 addons/attribute-system/AttributeSystem.csproj，测试在 tests/AttributeSystem.Tests.csproj。 -->
+  <!-- Godot 主工程：插件源码归插件工程（ProjectReference 引用）；测试源码物理位于 tests/，
+       但必须编译进本程序集——gdUnit4 编辑器面板只扫描主程序集发现 C# 测试；
+       addons/gdUnit4 的 C# 桥接包装类同理必须留在主程序集编译。 -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
@@ -13,10 +14,15 @@
   <ItemGroup>
     <ProjectReference Include="addons/attribute-system/AttributeSystem.csproj" />
   </ItemGroup>
-  <!-- 主程序集不含任何手写源码：插件源码归插件工程、测试源码归测试工程 -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="gdUnit4.api" Version="5.1.0-rc6" />
+    <PackageReference Include="gdUnit4.test.adapter" Version="3.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 排除插件源码（由插件工程编译），但保留 gdUnit4 桥接类；tests/ 源码经隐式通配编入本程序集 -->
     <Compile Remove="addons/**/*.cs" />
-    <Compile Remove="tests/**/*.cs" />
+    <Compile Include="addons/gdUnit4/src/dotnet/*.cs" />
   </ItemGroup>
 
 </Project>

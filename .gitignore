@@ -2,8 +2,11 @@
 .godot/
 /android/
 addons/**/*.uid
+tests/**/*.uid
 LOCAL.md
 .sonarqube/
 TestResults/
 bin/
 obj/
+**/gdUnit4/
+reports/
