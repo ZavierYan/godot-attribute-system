@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: build + test + sonarcloud
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0  # Sonar blame/新代码检测需要完整历史
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup JDK
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          java-version: 21
+          distribution: zulu
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: 检查 SonarCloud 配置
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "${SONAR_TOKEN:-}" ]; then
+            echo "::error::缺少 SonarCloud 配置。请在仓库 Settings -> Secrets and variables -> Actions 中配置："
+            echo "::error::  - Secret SONAR_TOKEN（SonarCloud 令牌）"
+            exit 1
+          fi
+
+      - name: 安装 Sonar 工具
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet tool install --global dotnet-coverage
+
+      - name: SonarScanner begin
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: >
+          dotnet sonarscanner begin
+          /k:"ZavierYan_godot-attribute-system"
+          /o:"zavieryan"
+          /d:sonar.token="$SONAR_TOKEN"
+          /d:sonar.cs.cobertura.reportsPaths=TestResults/coverage.cobertura.xml
+          /d:sonar.exclusions="reports/**"
+          /d:sonar.qualityGate.wait=true
+
+      - name: Build
+        run: dotnet build attribute-system.sln
+
+      - name: Test（采集覆盖率）
+        run: |
+          mkdir -p TestResults
+          dotnet-coverage collect -f cobertura -o TestResults/coverage.cobertura.xml "dotnet test attribute-system.sln --no-build"
+
+      - name: SonarScanner end
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"

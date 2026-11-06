@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build attribute-system.sln
+
+      - name: Test
+        run: dotnet test attribute-system.sln --no-build
+
+      - name: 打包插件源码 zip
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ZIP="attribute-system-${VERSION}.zip"
+          git archive --format=zip -o "$ZIP" "${GITHUB_REF_NAME}" -- addons/attribute-system
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$ZIP" --generate-notes --latest
