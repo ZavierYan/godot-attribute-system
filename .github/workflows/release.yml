@@ -32,7 +32,13 @@ jobs:
           git archive --format=zip -o "$ZIP" "${GITHUB_REF_NAME}" -- addons/attribute-system README.md
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
-      - name: 创建 GitHub Release
+      - name: 创建或补传 GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "$ZIP" --generate-notes --latest
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # 网页端创建 release 会自动建 tag 并触发本工作流——此时 release 已存在，仅补传 zip 资产
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" --generate-notes --latest
+          fi
