@@ -1,6 +1,33 @@
 # Attribute System
 
-Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值层。核心组件五个：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用），`AttributePrototypeLibrary` 按名管理可克隆的原型模板。derived 除 plain 表达式外还支持聚合栈形态——builder 以 `RequireStacked` 声明 seed，owner 运行期经 `AddBase`/`AddDerived`/`AddStacked` 注入属性、`Contribute`/`RemoveContribution` 增撤类型化贡献、`RemoveAttribute` 移除属性（见「聚合栈与运行时注入」）。下面按完整使用流程走一遍。
+Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅变更、支持表达式派生的数值属性层。
+
+## 简介
+
+解决"力量 → 攻击力 → 总伤害"这类属性派生与 buff/debuff 叠加的手工维护问题：派生值漏失效、叠加规则散落各处、难以测试。本插件把属性的**定义、声明、校验、失效传播**收敛为一个小库。
+
+特性一览：
+
+- **表达式派生**：NCalc 表达式声明计算，依赖从表达式自动提取，依赖变更自动失效、读取时重算（惰性）
+- **聚合栈**：buff/debuff、装备词缀的三桶叠加协议（flat / additive / multiplicative），每条贡献是完整表达式
+- **可订阅**：base 值变更事件、derived 失效事件，按拓扑序分发
+- **快速失败**：构建期一次抛齐全部声明错误；运行期变异先校验后变更，失败时状态不变
+- **值类型可切换**：float → int / double / decimal 只改一行别名
+- **零 Godot API 依赖**：纯 C# 逻辑库，不依赖场景树，可在无 Godot 环境下进程内测试
+
+适用场景：Godot 4 C# 项目的角色/单位属性、buff 系统、装备词缀等数值层。
+
+核心组件：`AttributeSpec`（定义属性）→ `AttributeSpecLibrary`（注册中心）→ `AttributeOwnerBuilder`（构建）→ `AttributeOwner`（使用），`AttributePrototypeLibrary` 按名管理可克隆的原型模板。
+
+## 开发文档
+
+| | |
+|---|---|
+| [⚙️ 架构](docs/architecture.md) | 系统分层、组件职责与关键机制 |
+| [📁 结构](docs/structure.md) | 仓库布局、双工程结构与分发边界 |
+| [🚀 安装详解](docs/installation.md) | 完整安装步骤、值类型切换与常见问题 |
+| [🧠 技术决策](docs/decisions.md) | 设计取舍与"为什么这样做" |
+| [🛠️ 开发操作](docs/DEVELOPMENT.md) | 构建、测试、覆盖率、质量扫描、发布 |
 
 ## 安装
 
@@ -16,6 +43,8 @@ Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅
    ```xml
    <Compile Remove="addons/attribute-system/**/*.cs" />
    ```
+
+前置要求、值类型切换细节与常见问题排查见 [docs/installation.md](docs/installation.md)。
 
 ## 第 1 步：配置值类型（可选）
 
@@ -254,25 +283,10 @@ total = attack + 5                  可以引用其它 derived 属性
 - spec 的 min/max 是硬性安全护栏（防负数、防溢出），写入与派生结果都会被钳制；"血量上限"这类会变化的游戏上限请建模为独立 attribute，再通过表达式参与计算（如 `Clamp(health, 0, maxHealth)`）。
 - derived 的值永远等于"用依赖当前值重算"的结果，把它当只读视图即可。
 
-## 源码结构
+## 源码与开发
 
-| 文件 | 职责 |
-|---|---|
-| AttributeValueType.cs | 值类型别名（全插件唯一声明点，切换数值类型只改这一行） |
-| AttributeSpec.cs / AttributeSpecLibrary.cs | 属性定义与注册中心 |
-| AttributeOwnerBuilder.cs | 构建器：声明收集、构建期校验、owner 装配 |
-| AttributeOwner.cs | 属性容器：失效传播、克隆与写时复制、运行时注入原语 |
-| Attribute.cs | 运行时属性：读写钳制、derived 缓存、变更/失效事件 |
-| CompiledExpression.cs | NCalc 表达式封装：解析、依赖提取、求值、编译为委托 |
-| IAttributeCalculation.cs | 求值方案统一接口（plain 与聚合栈同签名） |
-| DerivedCalculation.cs | plain derived 求值方案（依赖列表 + 统一求值委托） |
-| StackedCalculation.cs | 聚合栈求值方案：三桶贡献、依赖并集、三段折叠 |
-| ContributionKind.cs | 贡献类型枚举（flat / additive / multiplicative） |
-| ContributionHandle.cs | 贡献句柄：一次性撤销凭证 |
-| AttributeTopology.cs | 计算表拓扑序构建（构建期与运行期共用） |
-| AttributePrototypeLibrary.cs | 原型模板库：按名登记、按名克隆 |
-| Guard.cs / NumberOps.cs | 参数校验 / 泛型数学数值工具 |
-| AttributeSystem.csproj | 插件工程文件（`NCalc` 依赖随 ProjectReference 传递） |
+架构设计、源码结构、开发与发布流程见开发文档：
 
-测试位于仓库 `tests/` 目录（编译进 Godot 主工程程序集，不随插件目录分发，为 gdUnit4 纯逻辑测试）；运行测试、覆盖率采集、质量扫描与发布流程见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
+- 源码逐文件职责与仓库布局：[docs/structure.md](docs/structure.md)
+- 系统分层与关键机制：[docs/architecture.md](docs/architecture.md)
+- 测试（位于仓库 `tests/` 目录，gdUnit4 纯逻辑测试）、覆盖率、质量扫描与发布流程：[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
