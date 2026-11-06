@@ -274,15 +274,5 @@ total = attack + 5                  可以引用其它 derived 属性
 | Guard.cs / NumberOps.cs | 参数校验 / 泛型数学数值工具 |
 | AttributeSystem.csproj | 插件工程文件（`NCalc` 依赖随 ProjectReference 传递） |
 
-测试位于本仓库根 `tests/`（源码编译进 Godot 主工程程序集，不随插件目录分发）：GdUnit4 纯逻辑测试，见「运行测试」。
-
-## 运行测试
-
-测试不在插件目录内，位于本仓库根 `tests/`：
-
-```bash
-dotnet test attribute-system.sln
-```
-
-测试为纯逻辑测试：gdUnit4 进程内运行，无需启动 Godot，无需设置 `GODOT_BIN`。
+测试位于仓库 `tests/` 目录（编译进 Godot 主工程程序集，不随插件目录分发，为 gdUnit4 纯逻辑测试）；运行测试、覆盖率采集、质量扫描与发布流程见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 

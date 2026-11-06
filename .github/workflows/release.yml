@@ -29,7 +29,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ZIP="attribute-system-${VERSION}.zip"
-          git archive --format=zip -o "$ZIP" "${GITHUB_REF_NAME}" -- addons/attribute-system
+          git archive --format=zip -o "$ZIP" "${GITHUB_REF_NAME}" -- addons/attribute-system README.md
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
 
       - name: 创建 GitHub Release
