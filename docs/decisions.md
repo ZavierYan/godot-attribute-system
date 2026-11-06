@@ -64,4 +64,4 @@ Godot.NET.Sdk 4.7.2 通配编译源码时未排除其它工程目录下的 bin/o
 
 ## 12. 发布：git archive 打包，tag 为版本唯一来源
 
-release.yml 以 `git archive` 打包（zip 顶层 README + `addons/attribute-system/` 前缀，命名 `attribute-system-<版本>.zip`，版本 = tag 去 `v` 前缀）——没有需要同步的版本元数据文件。守门（build + test）失败则不产生 Release。细节见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+release.yml 以 `git archive` 打包（zip 顶层 README + `addons/attribute-system/` 前缀，命名 `attribute-system-<版本>.zip`，版本 = tag 去 `v` 前缀）——没有需要同步的版本元数据文件。守门（build + test）失败则不产生 Release。发布步骤幂等：网页端创建 release 会自动建 tag 并触发本工作流，此时 release 已存在、仅补传 zip（`--clobber`）而不报错——push tag 与网页建 release 两条路径殊途同归。细节见 [DEVELOPMENT.md](DEVELOPMENT.md)。

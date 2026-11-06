@@ -61,4 +61,4 @@ push 形如 `v*` 的 tag 即自动发布（`.github/workflows/release.yml`），
 
 1. 守门：`dotnet build` + `dotnet test --no-build`，失败则中止、不产生 Release
 2. 打包：`git archive` 打出插件目录与仓库根 README，zip 顶层为用户手册 `README.md` + `addons/attribute-system/` 前缀，命名 `attribute-system-<版本>.zip`（版本 = tag 去掉 `v` 前缀）
-3. 发布：`gh release create --generate-notes --latest`
+3. 发布：release 已存在（网页端创建 release 会自动建 tag 并触发本工作流）则补传 zip（`gh release upload --clobber`），否则 `gh release create --generate-notes --latest`——步骤幂等，两条入口殊途同归
