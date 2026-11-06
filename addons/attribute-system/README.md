@@ -11,6 +11,12 @@ Godot 4 C# 属性系统插件（源码分发）：为游戏实体提供可订阅
    <ProjectReference Include="addons/attribute-system/AttributeSystem.csproj" />
    ```
 
+3. 在宿主项目 csproj 中排除插件源码的通配编译——Godot SDK 会把 `addons/` 下所有 `.cs` 通配编进宿主程序集，与 ProjectReference 产出的 `AttributeSystem.dll` 构成重复类型（CS0436，每个类型一条警告）：
+
+   ```xml
+   <Compile Remove="addons/attribute-system/**/*.cs" />
+   ```
+
 ## 第 1 步：配置值类型（可选）
 
 打开 `addons/attribute-system/AttributeValueType.cs`，整个插件只有这一行声明值类型：
